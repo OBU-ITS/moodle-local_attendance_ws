@@ -31,6 +31,14 @@ $functions = array(
 		'type'        => 'write',
 		'capabilities'=> 'mod/attendance:manageattendances'
 	),
+    'local_attendance_ws_add_sessions' => array(
+        'classname'   => 'local_attendance_ws_external',
+        'methodname'  => 'add_sessions',
+        'classpath'   => 'local/attendance_ws/externallib.php',
+        'description' => 'Adds new attendance sessions with the given details. Returns an array.',
+        'type'        => 'write',
+        'capabilities'=> 'mod/attendance:manageattendances'
+    ),
 	'local_attendance_ws_update_session' => array(
 		'classname'   => 'local_attendance_ws_external',
 		'methodname'  => 'update_session',
@@ -39,6 +47,14 @@ $functions = array(
 		'type'        => 'write',
 		'capabilities'=> 'mod/attendance:manageattendances'
 	),
+    'local_attendance_ws_update_sessions' => array(
+        'classname'   => 'local_attendance_ws_external',
+        'methodname'  => 'update_sessions',
+        'classpath'   => 'local/attendance_ws/externallib.php',
+        'description' => 'Updates attendance sessions with the given details. Returns an array.',
+        'type'        => 'write',
+        'capabilities'=> 'mod/attendance:manageattendances'
+    ),
 	'local_attendance_ws_delete_session' => array(
 		'classname'   => 'local_attendance_ws_external',
 		'methodname'  => 'delete_session',
@@ -47,6 +63,14 @@ $functions = array(
 		'type'        => 'write',
 		'capabilities'=> 'mod/attendance:manageattendances'
 	),
+    'local_attendance_ws_delete_sessions' => array(
+        'classname'   => 'local_attendance_ws_external',
+        'methodname'  => 'delete_sessions',
+        'classpath'   => 'local/attendance_ws/externallib.php',
+        'description' => 'Deletes attendance sessions with the given ID. Returns an array.',
+        'type'        => 'write',
+        'capabilities'=> 'mod/attendance:manageattendances'
+    ),
     'local_attendance_ws_get_settings' => array(
         'classname'   => 'local_attendance_ws_external',
         'methodname'  => 'get_settings',
