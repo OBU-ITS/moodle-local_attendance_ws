@@ -236,7 +236,7 @@ class local_attendance_ws_external extends external_api {
         foreach ($params['courses'] as $courseData) {
             $courseIdNumber = $courseData['courseIdNumber'];
 
-            if (strlen($params['idnumber']) < 1 ) {
+            if (strlen($courseIdNumber) < 1 ) {
                 $messages[] = "Course ID number '{$courseIdNumber}' not valid";
                 continue;
             }
@@ -265,7 +265,6 @@ class local_attendance_ws_external extends external_api {
             require_capability('mod/attendance:manageattendances', $context);
 
             foreach ($courseData['sessions'] as $sessionData) {
-                $sessionId = $sessionData['sessionId'];
                 $slotId = $sessionData['slotId'];
                 $roomId = $sessionData['roomId'];
                 $group = $sessionData['group'];
@@ -284,14 +283,14 @@ class local_attendance_ws_external extends external_api {
                 ];
 
                 if (strlen($slotId) < 1) {
-                    $userResult['message'] = "Invalid slot id.";
-                    $results[] = $userResult;
+                    $sessionResult['message'] = "Invalid slot id.";
+                    $results[] = $sessionResult;
                     continue;
                 }
 
                 if (strlen($roomId) < 1) {
-                    $userResult['message'] = "Invalid room Ids.";
-                    $results[] = $userResult;
+                    $sessionResult['message'] = "Invalid room Ids.";
+                    $results[] = $sessionResult;
                     continue;
                 }
 
@@ -419,7 +418,7 @@ class local_attendance_ws_external extends external_api {
 			)
 		);
 
-		if (strlen($params['sessionid']) < 1) {
+		if ($params['sessionid'] < 1) {
 			return array('result' => -1);
 		}
 
@@ -513,21 +512,21 @@ class local_attendance_ws_external extends external_api {
                 'status' => false
             ];
 
-            if (strlen($sessionId) < 1) {
-                $userResult['message'] = "Invalid session Id.";
-                $results[] = $userResult;
+            if ($sessionId < 1) {
+                $sessionResult['message'] = "Invalid session Id.";
+                $results[] = $sessionResult;
                 continue;
             }
 
             if (!($session = $DB->get_record('attendance_sessions', array('id' => $sessionId)))) {
-                $userResult['message'] = "Session does not exist.";
-                $results[] = $userResult;
+                $sessionResult['message'] = "Session does not exist.";
+                $results[] = $sessionResult;
                 continue;
             }
 
             if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid))) {
-                $userResult['message'] = "Course Module (Activity) '{$session->attendanceid}' does not exist.";
-                $results[] = $userResult;
+                $sessionResult['message'] = "Course Module (Activity) '{$session->attendanceid}' does not exist.";
+                $results[] = $sessionResult;
                 continue;
             }
 
@@ -560,7 +559,7 @@ class local_attendance_ws_external extends external_api {
                 $sessionResult['status'] = true;
             }
             catch (Exception $e) {
-                $sessionResult['message'] = "Error removing user: " . $e->getMessage();
+                $sessionResult['message'] = "Error updating user: " . $e->getMessage();
             }
 
             $results[] = $sessionResult;
