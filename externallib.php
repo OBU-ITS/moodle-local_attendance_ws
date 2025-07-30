@@ -429,7 +429,7 @@ class external extends external_api {
 
         return ['messages' => $messages, 'results' => $results];
     }
-
+    
     public static function delete_sessions_parameters() {
         return new external_function_parameters([
             'sessions' => new external_multiple_structure(
