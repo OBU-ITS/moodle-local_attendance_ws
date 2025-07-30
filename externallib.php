@@ -23,703 +23,606 @@
  *
  */
 
+namespace local_attendance_ws;
+
+use external_api;
+use external_function_parameters;
+use external_single_structure;
+use external_multiple_structure;
+use external_value;
+use context_system;
+use context_module;
+
+use local_attendance_ws\service\session_service;
+
+defined('MOODLE_INTERNAL') || die();
+
 require_once($CFG->libdir . "/externallib.php");
-require_once($CFG->dirroot . "/local/attendance_ws/locallib.php");
+require_once($CFG->dirroot . "/course/modlib.php");
+require_once($CFG->dirroot . "/mod/attendance/locallib.php");
 require_once($CFG->dirroot . "/mod/attendance/renderhelpers.php");
 require_once($CFG->dirroot . "/mod/attendance/classes/structure.php");
-require_once($CFG->dirroot . "/mod/attendance/locallib.php");
-require_once($CFG->dirroot . "/course/modlib.php");
-require_once($CFG->dirroot . "/group/lib.php");
-require_once($CFG->dirroot . "/local/obu_metalinking/lib.php");
-require_once($CFG->dirroot . "/local/obu_group_manager/lib.php");
 
-class local_attendance_ws_external extends external_api {
-
-    // Add sessions
+class external extends external_api {
     public static function add_session_parameters() {
-		return new external_function_parameters(
-			array(
-				'idnumber' => new external_value(PARAM_TEXT, 'Course ID number'),
-                'slotid' => new external_value(PARAM_TEXT, 'Slot ID number'),
-                'roomid' => new external_value(PARAM_TEXT, 'Room ID number'),
-				'group' => new external_value(PARAM_TEXT, 'Group'),
-                'start' => new external_value(PARAM_INT, 'Session start time'),
-                'duration' => new external_value(PARAM_INT, 'Session duration'),
-                'semesterName' => new external_value(PARAM_TEXT, 'Semester name')
-			)
-		);
-	}
+        return new external_function_parameters([
+            'idnumber' => new external_value(PARAM_TEXT),
+            'slotid' => new external_value(PARAM_TEXT),
+            'roomid' => new external_value(PARAM_TEXT),
+            'group' => new external_value(PARAM_TEXT),
+            'start' => new external_value(PARAM_INT),
+            'duration' => new external_value(PARAM_INT),
+            'semesterName' => new external_value(PARAM_TEXT),
+        ]);
+    }
 
-	public static function add_session_returns() {
-		return new external_single_structure(
-			array(
-				'result' => new external_value(PARAM_INT, 'Result')
-			)
-		);
-	}
+    public static function add_session_returns() {
+        return new external_single_structure([
+            'result' => new external_value(PARAM_INT)
+        ]);
+    }
 
-	public static function add_session($idnumber, $slotid, $roomid, $group, $start, $duration, $semesterName) {
-		global $DB;
+    public static function add_session($idnumber, $slotid, $roomid, $group, $start, $duration, $semesterName) {
+        global $DB;
 
-		self::validate_context(context_system::instance());
-		$params = self::validate_parameters(
-			self::add_session_parameters(), array(
-				'idnumber' => $idnumber,
-                'slotid' => $slotid,
-                'roomid' => $roomid,
-				'group' => $group,
-				'start' => $start,
-                'duration' => $duration,
-                'semesterName' => $semesterName
-			)
-		);
+        self::validate_context(context_system::instance());
+        $params = self::validate_parameters(self::add_session_parameters(), compact('idnumber', 'slotid', 'roomid', 'group', 'start', 'duration', 'semesterName'));
 
+        if (empty($params['idnumber']) || empty($params['slotid']) || empty($params['roomid'])) {
+            return ['result' => -1];
+        }
 
-		if (strlen($params['idnumber']) < 1 || strlen($params['slotid']) < 1 || strlen($params['roomid']) < 1) {
-			return array('result' => -1);
-		}
-
-		if (!($course = $DB->get_record('course', array('idnumber' => $params['idnumber'])))) {
-			return array('result' => -2);
-		}
+        $course = $DB->get_record('course', ['idnumber' => $params['idnumber']]);
+        if (!$course) {
+            return ['result' => -2];
+        }
 
         $teachingcourse = local_obu_metalinking_get_teaching_course($course);
-        if (!($attendance = local_attendance_ws_find_attendance_activity($teachingcourse))) {
-            return array('result' => -3);
+        $attendance = local_attendance_ws_find_attendance_activity($teachingcourse);
+        if (!$attendance) {
+            return ['result' => -3];
         }
 
-		if (!($cm = get_coursemodule_from_instance('attendance', $attendance->id, 0, false))) {
-			return array('result' => -4);
-		}
+        $cm = get_coursemodule_from_instance('attendance', $attendance->id, 0, false);
+        if (!$cm) {
+            return ['result' => -4];
+        }
+
+        $context = context_module::instance($cm->id);
+        require_capability('mod/attendance:manageattendances', $context);
 
         $pluginconfig = get_config('attendance');
+        $sessiondata = [
+            'slotid' => $params['slotid'],
+            'roomid' => $params['roomid'],
+            'start' => $params['start'],
+            'duration' => $params['duration'],
+            'group' => $params['group'],
+            'semesterName' => $params['semesterName']
+        ];
 
-		// Capability checking
-		$context = context_module::instance($cm->id);
-		require_capability('mod/attendance:manageattendances', $context);
+        $session = session_service::build_session_object($sessiondata, $course, $attendance, $pluginconfig);
+        $session->id = $DB->insert_record('attendance_sessions', $session);
+        attendance_create_calendar_event($session);
 
-		$session = new stdClass();
-		$session->attendanceid = $attendance->id;
-        $session->timetableeventid = $params['slotid'];
-        $session->roomid = $params['roomid'];
-		$session->sessdate = $params['start'];
-		$session->duration = $params['duration'];
-		$session->lasttaken = null;
-		$session->lasttakenby = 0;
-		$session->timemodified = time();
+        $event = \mod_attendance\event\session_added::create([
+            'objectid' => $attendance->id,
+            'context' => $context,
+            'other' => ['info' => construct_session_full_date_time($session->sessdate, $session->duration)]
+        ]);
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->add_record_snapshot('attendance_sessions', $session);
+        $event->trigger();
 
-        $usergroup = ($params['group'] == '0' || $params['group'] == '')
-            ? local_obu_group_manager_create_system_group($course, null, null, null, null, $teachingcourse)
-            : local_obu_group_manager_create_system_group($course, null, null, $semesterName, $group, $teachingcourse);
+        mod_attendance_notifyqueue::notify_success(get_string('sessiongenerated', 'attendance'));
 
-        $session->groupid = $usergroup->id;
+        return ['result' => $session->id];
+    }
 
-        $session->description = "Room(s): " . $params['roomid'];
+    public static function update_session_parameters() {
+        return new external_function_parameters([
+            'sessionid' => new external_value(PARAM_INT),
+            'start' => new external_value(PARAM_INT),
+            'duration' => new external_value(PARAM_INT),
+            'roomid' => new external_value(PARAM_TEXT)
+        ]);
+    }
 
- 		$session->descriptionformat = 1;
-		$session->statusset = 0;
-        $session->calendarevent = 0;
+    public static function update_session_returns() {
+        return new external_single_structure([
+            'result' => new external_value(PARAM_INT)
+        ]);
+    }
 
-        $salt = get_config('local_attendance_ws', 'salt');
-        $session->studentpassword = local_attendance_ws_password_hash($params['slotid'], $params['roomid'], $params['start'], 6, $salt);
-        $session->sessioninstancecode = local_attendance_ws_session_instance_code($params['slotid'], $params['roomid'], $params['start']);
+    public static function update_session($sessionid, $start, $duration, $roomid) {
+        global $DB;
 
-        if (isset($pluginconfig->calendarevent_default)) {
-            $session->caleventid = $pluginconfig->calendarevent_default;
-        }
-        if (isset($pluginconfig->studentscanmark_default)) {
-            $session->studentscanmark = $pluginconfig->studentscanmark_default;
-        }
-        if (isset($pluginconfig->randompassword_default)) {
-            $session->randompassword = $pluginconfig->randompassword_default;
-        }
-        if (isset($pluginconfig->includeqrcode_default)) {
-            $session->includeqrcode = $pluginconfig->includeqrcode_default;
-        }
-        if (isset($pluginconfig->autoassignstatus)) {
-            $session->autoassignstatus = $pluginconfig->autoassignstatus;
-        }
-        if (isset($pluginconfig->allowupdatestatus_default)) {
-            $session->allowupdatestatus = $pluginconfig->allowupdatestatus_default;
-        }
-        if (isset($pluginconfig->rotateqrcode_default)) {
-            $session->rotateqrcode = $pluginconfig->rotateqrcode_default;
-        }
-        if (isset($pluginconfig->automark_default)) {
-            $session->automark = $pluginconfig->automark_default;
-        }
-        if (isset($pluginconfig->studentsearlyopentime)) {
-            $session->studentsearlyopentime = $pluginconfig->studentsearlyopentime;
-        }
-        if (!empty($session->rotateqrcode)) {
-            $session->studentpassword = local_attendance_ws_password_hash($params['slotid'], $params['roomid'], $params['start'], 6, $salt);
-            $session->rotateqrcodesecret = local_attendance_ws_password_hash($params['slotid'], $params['roomid'], $params['start'], 6, $salt);
+        self::validate_context(context_system::instance());
+        $params = self::validate_parameters(self::update_session_parameters(), compact('sessionid', 'start', 'duration', 'roomid'));
+
+        if ($params['sessionid'] < 1) {
+            return ['result' => -1];
         }
 
-		$session->id = $DB->insert_record('attendance_sessions', $session);
-		attendance_create_calendar_event($session);
+        $session = $DB->get_record('attendance_sessions', ['id' => $params['sessionid']]);
+        if (!$session) {
+            return ['result' => 0];
+        }
 
-		// Trigger a session added event
-		$event = \mod_attendance\event\session_added::create(array(
-			'objectid' => $attendance->id,
-			'context' => $context,
-			'other' => array('info' => construct_session_full_date_time($session->sessdate, $session->duration))
-		));
-		$event->add_record_snapshot('course_modules', $cm);
-		$event->add_record_snapshot('attendance_sessions', $session);
-		$event->trigger();
+        $cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false);
+        if (!$cm) {
+            return ['result' => -2];
+        }
 
-		mod_attendance_notifyqueue::notify_success(get_string('sessiongenerated', 'attendance'));
+        $context = context_module::instance($cm->id);
+        require_capability('mod/attendance:manageattendances', $context);
 
-		return array('result' => $session->id);
-	}
+        $session = session_service::update_session_properties($session, $params['start'], $params['duration'], $params['roomid']);
+        $DB->update_record('attendance_sessions', $session);
+
+        $event = \mod_attendance\event\session_updated::create([
+            'objectid' => $session->attendanceid,
+            'context' => $context,
+            'other' => [
+                'info' => construct_session_full_date_time($session->sessdate, $session->duration),
+                'sessionid' => $session->id,
+                'action' => \mod_attendance_sessions_page_params::ACTION_UPDATE
+            ]
+        ]);
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->add_record_snapshot('attendance_sessions', $session);
+        $event->trigger();
+
+        return ['result' => $session->id];
+    }
+
+    public static function delete_session_parameters() {
+        return new external_function_parameters([
+            'sessionid' => new external_value(PARAM_INT)
+        ]);
+    }
+
+    public static function delete_session_returns() {
+        return new external_single_structure([
+            'result' => new external_value(PARAM_INT)
+        ]);
+    }
+
+    public static function delete_session($sessionid) {
+        global $DB;
+
+        self::validate_context(context_system::instance());
+        $params = self::validate_parameters(self::delete_session_parameters(), ['sessionid' => $sessionid]);
+
+        if ($params['sessionid'] < 1) {
+            return ['result' => -1];
+        }
+
+        $session = $DB->get_record('attendance_sessions', ['id' => $params['sessionid']]);
+        if (!$session) {
+            return ['result' => 0];
+        }
+
+        $cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false);
+        if (!$cm) {
+            return ['result' => -2];
+        }
+
+        $context = context_module::instance($cm->id);
+        require_capability('mod/attendance:manageattendances', $context);
+
+        if ($session->caleventid) {
+            attendance_delete_calendar_events([$params['sessionid']]);
+        }
+
+        $DB->delete_records('attendance_log', ['sessionid' => $params['sessionid']]);
+        $DB->delete_records('attendance_sessions', ['id' => $params['sessionid']]);
+
+        $event = \mod_attendance\event\session_deleted::create([
+            'objectid' => $session->attendanceid,
+            'context' => $context,
+            'other' => ['info' => $params['sessionid']]
+        ]);
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->trigger();
+
+        return ['result' => $params['sessionid']];
+    }
 
     public static function add_sessions_parameters() {
-        return new external_function_parameters(
-            array(
-                'courses' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'courseIdNumber' => new external_value(PARAM_TEXT, 'Course ID number'),
-                            'sessions' => new external_multiple_structure(
-                                new external_single_structure(
-                                    array(
-                                        'slotId' => new external_value(PARAM_TEXT, 'Slot ID number'),
-                                        'roomId' => new external_value(PARAM_TEXT, 'Room ID number'),
-                                        'group' => new external_value(PARAM_TEXT, 'Group'),
-                                        'start' => new external_value(PARAM_INT, 'Session start time'),
-                                        'duration' => new external_value(PARAM_INT, 'Session duration'),
-                                        'semesterName' => new external_value(PARAM_TEXT, 'Semester name')
-                                    )
-                                )
-                            )
-                        )
+        return new external_function_parameters([
+            'courses' => new external_multiple_structure(
+                new external_single_structure([
+                    'courseIdNumber' => new external_value(PARAM_TEXT),
+                    'sessions' => new external_multiple_structure(
+                        new external_single_structure([
+                            'slotId' => new external_value(PARAM_TEXT),
+                            'roomId' => new external_value(PARAM_TEXT),
+                            'group' => new external_value(PARAM_TEXT),
+                            'start' => new external_value(PARAM_INT),
+                            'duration' => new external_value(PARAM_INT),
+                            'semesterName' => new external_value(PARAM_TEXT)
+                        ])
                     )
-                )
+                ])
             )
-        );
+        ]);
     }
 
     public static function add_sessions_returns() {
-        return new external_single_structure(
-            array(
-                'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, 'General processing messages or warnings')
-                ),
-                'results' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'courseIdNumber' => new external_value(PARAM_TEXT, 'Course ID number'),
-                            'slotId' => new external_value(PARAM_TEXT, 'Slot ID number'),
-                            'roomId' => new external_value(PARAM_TEXT, 'Room ID number'),
-                            'group' => new external_value(PARAM_TEXT, 'Group'),
-                            'start' => new external_value(PARAM_INT, 'Session start time'),
-                            'duration' => new external_value(PARAM_INT, 'Session duration'),
-                            'status' => new external_value(PARAM_BOOL, 'True if user was added successfully, false otherwise'),
-                            'message' => new external_value(PARAM_TEXT, 'Optional message about the result', VALUE_OPTIONAL),
-                            'sessionId' => new external_value(PARAM_TEXT, 'Optional session ID when successful', VALUE_OPTIONAL)
-                        )
-                    )
-                )
+        return new external_single_structure([
+            'messages' => new external_multiple_structure(new external_value(PARAM_TEXT)),
+            'results' => new external_multiple_structure(
+                new external_single_structure([
+                    'courseIdNumber' => new external_value(PARAM_TEXT),
+                    'slotId' => new external_value(PARAM_TEXT),
+                    'roomId' => new external_value(PARAM_TEXT),
+                    'group' => new external_value(PARAM_TEXT),
+                    'start' => new external_value(PARAM_INT),
+                    'duration' => new external_value(PARAM_INT),
+                    'status' => new external_value(PARAM_BOOL),
+                    'message' => new external_value(PARAM_TEXT, 'Optional message', VALUE_OPTIONAL),
+                    'sessionId' => new external_value(PARAM_INT, 'Optional session ID', VALUE_OPTIONAL)
+                ])
             )
-        );
+        ]);
     }
 
     public static function add_sessions($params) {
         global $DB;
 
         $params = self::validate_parameters(self::add_sessions_parameters(), $params);
-
         $results = [];
         $messages = [];
 
         foreach ($params['courses'] as $courseData) {
-            $courseIdNumber = $courseData['courseIdNumber'];
+            $idnumber = $courseData['courseIdNumber'];
+            $course = $DB->get_record('course', ['idnumber' => $idnumber]);
 
-            if (strlen($courseIdNumber) < 1 ) {
-                $messages[] = "Course ID number '{$courseIdNumber}' not valid";
-                continue;
-            }
-
-            $course = $DB->get_record('course', ['idnumber' => $courseIdNumber]);
             if (!$course) {
-                $messages[] = "Course with ID number '{$courseIdNumber}' not found.";
+                $messages[] = "Course '{$idnumber}' not found.";
                 continue;
             }
 
-            $teachingCourse = local_obu_metalinking_get_teaching_course($course);
-            if (!($attendance = local_attendance_ws_find_attendance_activity($teachingCourse))) {
-                $messages[] = "Attendance for '{$courseIdNumber}' (taught in {'$teachingCourse->idnumber'}) does not exist.";
+            $teachingcourse = local_obu_metalinking_get_teaching_course($course);
+            $attendance = local_attendance_ws_find_attendance_activity($teachingcourse);
+            if (!$attendance) {
+                $messages[] = "No attendance activity for '{$idnumber}'.";
                 continue;
             }
 
-            if (!($cm = get_coursemodule_from_instance('attendance', $attendance->id, 0, false))) {
-                $messages[] = "Course Module (Activity) for '{$courseIdNumber}' (taught in {'$teachingCourse->idnumber'}) does not exist.";
+            $cm = get_coursemodule_from_instance('attendance', $attendance->id);
+            if (!$cm) {
+                $messages[] = "No course module for '{$idnumber}'.";
                 continue;
             }
 
-            $pluginConfig = get_config('attendance');
-
-            // Capability checking
             $context = context_module::instance($cm->id);
             require_capability('mod/attendance:manageattendances', $context);
+            $pluginconfig = get_config('attendance');
 
-            foreach ($courseData['sessions'] as $sessionData) {
-                $slotId = $sessionData['slotId'];
-                $roomId = $sessionData['roomId'];
-                $group = $sessionData['group'];
-                $start = $sessionData['start'];
-                $duration = $sessionData['duration'];
-                $semesterName = $sessionData['semesterName'];
-
-                $sessionResult = [
-                    'courseIdNumber' => $courseIdNumber,
-                    'slotId' => $slotId,
-                    'roomId' => $roomId,
-                    'group' => $group,
-                    'start' => $start,
-                    'duration' => $duration,
+            foreach ($courseData['sessions'] as $sdata) {
+                $result = [
+                    'courseIdNumber' => $idnumber,
+                    'slotId' => $sdata['slotId'],
+                    'roomId' => $sdata['roomId'],
+                    'group' => $sdata['group'],
+                    'start' => $sdata['start'],
+                    'duration' => $sdata['duration'],
                     'status' => false
                 ];
 
-                if (strlen($slotId) < 1) {
-                    $sessionResult['message'] = "Invalid slot id.";
-                    $results[] = $sessionResult;
+                if (empty($sdata['slotId']) || empty($sdata['roomId'])) {
+                    $result['message'] = "Invalid slot or room ID.";
+                    $results[] = $result;
                     continue;
-                }
-
-                if (strlen($roomId) < 1) {
-                    $sessionResult['message'] = "Invalid room Ids.";
-                    $results[] = $sessionResult;
-                    continue;
-                }
-
-                $session = new stdClass();
-                $session->attendanceid = $attendance->id;
-                $session->timetableeventid = $slotId;
-                $session->roomid = $roomId;
-                $session->sessdate = $start;
-                $session->duration = $duration;
-                $session->lasttaken = null;
-                $session->lasttakenby = 0;
-                $session->timemodified = time();
-
-                $userGroup = ($group == '0' || $group == '')
-                    ? local_obu_group_manager_create_system_group($course, null, null, null, null, $teachingCourse)
-                    : local_obu_group_manager_create_system_group($course, null, null, $semesterName, $group, $teachingCourse);
-
-                $session->groupid = $userGroup->id;
-
-                $session->description = "Room(s): " . $roomId;
-
-                $session->descriptionformat = 1;
-                $session->statusset = 0;
-                $session->calendarevent = 0;
-
-                $session->studentpassword = local_attendance_ws_password_hash($slotId, $roomId, $start, 6, $pluginConfig->salt);
-                $session->sessioninstancecode = local_attendance_ws_session_instance_code($slotId, $roomId, $start);
-
-                if (isset($pluginConfig->calendarevent_default)) {
-                    $session->caleventid = $pluginConfig->calendarevent_default;
-                }
-                if (isset($pluginConfig->studentscanmark_default)) {
-                    $session->studentscanmark = $pluginConfig->studentscanmark_default;
-                }
-                if (isset($pluginConfig->randompassword_default)) {
-                    $session->randompassword = $pluginConfig->randompassword_default;
-                }
-                if (isset($pluginConfig->includeqrcode_default)) {
-                    $session->includeqrcode = $pluginConfig->includeqrcode_default;
-                }
-                if (isset($pluginConfig->autoassignstatus)) {
-                    $session->autoassignstatus = $pluginConfig->autoassignstatus;
-                }
-                if (isset($pluginConfig->allowupdatestatus_default)) {
-                    $session->allowupdatestatus = $pluginConfig->allowupdatestatus_default;
-                }
-                if (isset($pluginConfig->rotateqrcode_default)) {
-                    $session->rotateqrcode = $pluginConfig->rotateqrcode_default;
-                }
-                if (isset($pluginConfig->automark_default)) {
-                    $session->automark = $pluginConfig->automark_default;
-                }
-                if (isset($pluginConfig->studentsearlyopentime)) {
-                    $session->studentsearlyopentime = $pluginConfig->studentsearlyopentime;
-                }
-                if (!empty($session->rotateqrcode)) {
-                    $shh = local_attendance_ws_password_hash($slotId, $roomId, $start, 6, $pluginConfig->salt);
-                    $session->studentpassword = $shh;
-                    $session->rotateqrcodesecret = $shh;
                 }
 
                 try {
+                    $session = session_service::build_session_object($sdata, $course, $attendance, $pluginconfig);
                     $session->id = $DB->insert_record('attendance_sessions', $session);
                     attendance_create_calendar_event($session);
 
-                    // Trigger a session added event
-                    $event = \mod_attendance\event\session_added::create(array(
+                    $event = \mod_attendance\event\session_added::create([
                         'objectid' => $attendance->id,
                         'context' => $context,
-                        'other' => array('info' => construct_session_full_date_time($session->sessdate, $session->duration))
-                    ));
+                        'other' => ['info' => construct_session_full_date_time($session->sessdate, $session->duration)]
+                    ]);
                     $event->add_record_snapshot('course_modules', $cm);
                     $event->add_record_snapshot('attendance_sessions', $session);
                     $event->trigger();
 
-                    mod_attendance_notifyqueue::notify_success(get_string('sessiongenerated', 'attendance'));
+                    $result['status'] = true;
+                    $result['sessionId'] = $session->id;
 
-                    $sessionResult['sessionId'] = $session->id;
-                    $sessionResult['status'] = true;
-                }
-                catch (Exception $e) {
-                    $sessionResult['message'] = "Error removing user: " . $e->getMessage();
+                } catch (\Exception $e) {
+                    $result['message'] = "Error: " . $e->getMessage();
                 }
 
-                $results[] = $sessionResult;
+                $results[] = $result;
             }
         }
 
-        return [
-            'messages' => $messages,
-            'results' => $results
-        ];
+        return ['messages' => $messages, 'results' => $results];
     }
 
-    // Update sessions
-	public static function update_session_parameters() {
-		return new external_function_parameters(
-			array(
-				'sessionid' => new external_value(PARAM_INT, 'Session ID'),
-				'start' => new external_value(PARAM_INT, 'Session start time'),
-                'duration' => new external_value(PARAM_INT, 'Session duration'),
-                'roomid' => new external_value(PARAM_TEXT, 'Room Ids')
-			)
-		);
-	}
-
-	public static function update_session_returns() {
-		return new external_single_structure(
-			array(
-				'result' => new external_value(PARAM_INT, 'Result')
-			)
-		);
-	}
-
-	public static function update_session($sessionid, $start, $duration, $roomid) {
-		global $DB;
-
-		self::validate_context(context_system::instance());
-		$params = self::validate_parameters(
-			self::update_session_parameters(), array(
-				'sessionid' => $sessionid,
-				'start' => $start,
-                'duration' => $duration,
-                'roomid' => $roomid
-			)
-		);
-
-		if ($params['sessionid'] < 1) {
-			return array('result' => -1);
-		}
-
-		if (!($session = $DB->get_record('attendance_sessions', array('id' => $params['sessionid'])))) {
-			return array('result' => 0);
-		}
-
-		if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false))) {
-			return array('result' => -2);
-		}
-
-		// Capability checking
-		$context = context_module::instance($cm->id);
-		require_capability('mod/attendance:manageattendances', $context);
-
-		$session->sessdate = $params['start'];
-        $session->duration = $params['duration'];
-        $session->roomid = $params['roomid'];
-        $session->description = "Room(s): " . $params['roomid'];
-		$session->timemodified = time();
-		$DB->update_record('attendance_sessions', $session);
-
-		$event = \mod_attendance\event\session_updated::create(array(
-			'objectid' => $session->attendanceid,
-			'context' => $context,
-			'other' => array(
-				'info' => construct_session_full_date_time($session->sessdate, $session->duration),
-				'sessionid' => $session->id,
-				'action' => mod_attendance_sessions_page_params::ACTION_UPDATE
-			)
-		));
-        $event->add_record_snapshot('course_modules', $cm);
-        $event->add_record_snapshot('attendance_sessions', $session);
-        $event->trigger();
-
-		return array('result' => $params['sessionid']);
-	}
-
     public static function update_sessions_parameters() {
-        return new external_function_parameters(
-            array(
-                'sessions' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'sessionid' => new external_value(PARAM_INT, 'Session ID'),
-                            'start' => new external_value(PARAM_INT, 'Session start time'),
-                            'duration' => new external_value(PARAM_INT, 'Session duration'),
-                            'roomid' => new external_value(PARAM_TEXT, 'Room Ids')
-                        )
-                    )
-                )
+        return new external_function_parameters([
+            'sessions' => new external_multiple_structure(
+                new external_single_structure([
+                    'sessionid' => new external_value(PARAM_INT),
+                    'start' => new external_value(PARAM_INT),
+                    'duration' => new external_value(PARAM_INT),
+                    'roomid' => new external_value(PARAM_TEXT)
+                ])
             )
-        );
+        ]);
     }
 
     public static function update_sessions_returns() {
-        return new external_single_structure(
-            array(
-                'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, 'General processing messages or warnings')
-                ),
-                'results' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'sessionId' => new external_value(PARAM_TEXT, 'Group ID'),
-                            'status' => new external_value(PARAM_BOOL, 'True if user was removed successfully, false otherwise'),
-                            'message' => new external_value(PARAM_TEXT, 'Optional message about the result', VALUE_OPTIONAL)
-                        )
-                    )
-                )
+        return new external_single_structure([
+            'messages' => new external_multiple_structure(new external_value(PARAM_TEXT)),
+            'results' => new external_multiple_structure(
+                new external_single_structure([
+                    'sessionId' => new external_value(PARAM_INT),
+                    'status' => new external_value(PARAM_BOOL),
+                    'message' => new external_value(PARAM_TEXT, 'Optional message', VALUE_OPTIONAL)
+                ])
             )
-        );
+        ]);
     }
 
     public static function update_sessions($params) {
         global $DB;
 
         $params = self::validate_parameters(self::update_sessions_parameters(), $params);
-
         $results = [];
         $messages = [];
 
-        foreach ($params['sessions'] as $sessionData) {
-            $sessionId = $sessionData['sessionid'];
-            $start = $sessionData['start'];
-            $duration = $sessionData['duration'];
-            $roomId = $sessionData['roomid'];
-
-            $sessionResult = [
-                'sessionId' => $sessionId,
+        foreach ($params['sessions'] as $data) {
+            $result = [
+                'sessionId' => $data['sessionid'],
                 'status' => false
             ];
 
-            if ($sessionId < 1) {
-                $sessionResult['message'] = "Invalid session Id.";
-                $results[] = $sessionResult;
+            $session = $DB->get_record('attendance_sessions', ['id' => $data['sessionid']]);
+            if (!$session) {
+                $result['message'] = "Session not found.";
+                $results[] = $result;
                 continue;
             }
 
-            if (!($session = $DB->get_record('attendance_sessions', array('id' => $sessionId)))) {
-                $sessionResult['message'] = "Session does not exist.";
-                $results[] = $sessionResult;
+            $cm = get_coursemodule_from_instance('attendance', $session->attendanceid);
+            if (!$cm) {
+                $result['message'] = "Course module missing.";
+                $results[] = $result;
                 continue;
             }
 
-            if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid))) {
-                $sessionResult['message'] = "Course Module (Activity) '{$session->attendanceid}' does not exist.";
-                $results[] = $sessionResult;
-                continue;
-            }
-
-            // Capability checking
             $context = context_module::instance($cm->id);
             require_capability('mod/attendance:manageattendances', $context);
 
-            $session->sessdate = $start;
-            $session->duration = $duration;
-            $session->roomid = $roomId;
-            $session->description = "Room(s): " . $roomId;
-            $session->timemodified = time();
-
             try {
+                $session = session_service::update_session_properties($session, $data['start'], $data['duration'], $data['roomid']);
                 $DB->update_record('attendance_sessions', $session);
 
-                $event = \mod_attendance\event\session_updated::create(array(
+                $event = \mod_attendance\event\session_updated::create([
                     'objectid' => $session->attendanceid,
                     'context' => $context,
-                    'other' => array(
+                    'other' => [
                         'info' => construct_session_full_date_time($session->sessdate, $session->duration),
                         'sessionid' => $session->id,
-                        'action' => mod_attendance_sessions_page_params::ACTION_UPDATE
-                    )
-                ));
+                        'action' => \mod_attendance_sessions_page_params::ACTION_UPDATE
+                    ]
+                ]);
                 $event->add_record_snapshot('course_modules', $cm);
                 $event->add_record_snapshot('attendance_sessions', $session);
                 $event->trigger();
 
-                $sessionResult['status'] = true;
-            }
-            catch (Exception $e) {
-                $sessionResult['message'] = "Error updating user: " . $e->getMessage();
+                $result['status'] = true;
+            } catch (\Exception $e) {
+                $result['message'] = "Update error: " . $e->getMessage();
             }
 
-            $results[] = $sessionResult;
+            $results[] = $result;
         }
 
-        return [
-            'messages' => $messages,
-            'results' => $results
-        ];
+        return ['messages' => $messages, 'results' => $results];
     }
 
-
-    // Delete sessions
-	public static function delete_session_parameters() {
-		return new external_function_parameters(
-			array(
-				'sessionid' => new external_value(PARAM_INT, 'Session ID')
-			)
-		);
-	}
-
-	public static function delete_session_returns() {
-		return new external_single_structure(
-			array(
-				'result' => new external_value(PARAM_INT, 'Result')
-			)
-		);
-	}
-
-	public static function delete_session($sessionid) {
-		global $DB;
-
-		self::validate_context(context_system::instance());
-		$params = self::validate_parameters(
-			self::delete_session_parameters(), array(
-				'sessionid' => $sessionid
-			)
-		);
-
-		if (strlen($params['sessionid']) < 1) {
-			return array('result' => -1);
-		}
-
-		if (!($session = $DB->get_record('attendance_sessions', array('id' => $params['sessionid'])))) {
-			return array('result' => 0);
-		}
-
-		if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false))) {
-			return array('result' => -2);
-		}
-
-		// Capability checking
-		$context = context_module::instance($cm->id);
-		require_capability('mod/attendance:manageattendances', $context);
-
-		if ($session->caleventid) {
-			attendance_delete_calendar_events(array($params['sessionid']));
-		}
-
-		$DB->delete_records('attendance_log', array('sessionid' => $params['sessionid']));
-		$DB->delete_records('attendance_sessions', array('id' => $params['sessionid']));
-		$event = \mod_attendance\event\session_deleted::create(array(
-			'objectid' => $session->attendanceid,
-			'context' => $context,
-			'other' => array('info' => $params['sessionid'])
-		));
-        $event->add_record_snapshot('course_modules', $cm);
-        $event->trigger();
-
-		return array('result' => $params['sessionid']);
-	}
-
-
     public static function delete_sessions_parameters() {
-        return new external_function_parameters(
-            array(
-                'sessions' => new external_multiple_structure(
-                    new external_value(PARAM_INT, 'Session ID'),
-                    'Array of Session IDs'
-                )
+        return new external_function_parameters([
+            'sessions' => new external_multiple_structure(
+                new external_value(PARAM_INT)
             )
-        );
+        ]);
     }
 
     public static function delete_sessions_returns() {
-        return new external_single_structure(
-            array(
-                'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, 'General processing messages or warnings')
-                ),
-                'results' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'sessionId' => new external_value(PARAM_TEXT, 'Session ID'),
-                            'status' => new external_value(PARAM_BOOL, 'True if user was deleted successfully, false otherwise'),
-                            'message' => new external_value(PARAM_TEXT, 'Optional message about the result', VALUE_OPTIONAL)
-                        )
-                    )
-                )
+        return new external_single_structure([
+            'messages' => new external_multiple_structure(new external_value(PARAM_TEXT)),
+            'results' => new external_multiple_structure(
+                new external_single_structure([
+                    'sessionId' => new external_value(PARAM_INT),
+                    'status' => new external_value(PARAM_BOOL),
+                    'message' => new external_value(PARAM_TEXT, 'Optional message', VALUE_OPTIONAL)
+                ])
             )
-        );
+        ]);
     }
 
     public static function delete_sessions($params) {
         global $DB;
 
         $params = self::validate_parameters(self::delete_sessions_parameters(), $params);
-
         $results = [];
         $messages = [];
 
-        foreach ($params['sessions'] as $sessionsId) {
-            $sessionResult = [
-                'sessionId' => $sessionsId,
+        foreach ($params['sessions'] as $sessionid) {
+            $result = [
+                'sessionId' => $sessionid,
                 'status' => false
             ];
 
-            if (!($session = $DB->get_record('attendance_sessions', array('id' => $sessionsId)))) {
-                $sessionResult['message'] = "Session '{$sessionsId}' does not exist.";
-                $results[] = $sessionResult;
+            $session = $DB->get_record('attendance_sessions', ['id' => $sessionid]);
+            if (!$session) {
+                $result['message'] = "Session not found.";
+                $results[] = $result;
                 continue;
             }
 
-            if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false))) {
-                $sessionResult['message'] = "Course Module (Activity) '{$session->attendanceid}' does not exist.";
-                $results[] = $sessionResult;
+            $cm = get_coursemodule_from_instance('attendance', $session->attendanceid);
+            if (!$cm) {
+                $result['message'] = "Module not found.";
+                $results[] = $result;
                 continue;
             }
 
-            // Capability checking
             $context = context_module::instance($cm->id);
             require_capability('mod/attendance:manageattendances', $context);
 
-            if ($session->caleventid) {
-                attendance_delete_calendar_events(array($sessionsId));
-            }
-
             try {
-                $DB->delete_records('attendance_log', array('sessionid' => $sessionsId));
-                $DB->delete_records('attendance_sessions', array('id' => $sessionsId));
-                $event = \mod_attendance\event\session_deleted::create(array(
+                if ($session->caleventid) {
+                    attendance_delete_calendar_events([$sessionid]);
+                }
+                $DB->delete_records('attendance_log', ['sessionid' => $sessionid]);
+                $DB->delete_records('attendance_sessions', ['id' => $sessionid]);
+
+                $event = \mod_attendance\event\session_deleted::create([
                     'objectid' => $session->attendanceid,
                     'context' => $context,
-                    'other' => array('info' => $sessionsId)
-                ));
+                    'other' => ['info' => $sessionid]
+                ]);
                 $event->add_record_snapshot('course_modules', $cm);
                 $event->trigger();
-            } catch (Exception $e) {
-                $sessionResult['message'] = "Error deleting session: " . $e->getMessage();
+
+                $result['status'] = true;
+            } catch (\Exception $e) {
+                $result['message'] = "Delete failed: " . $e->getMessage();
             }
 
-            $results[] = $sessionResult;
+            $results[] = $result;
         }
 
-        return [
-            'messages' => $messages,
-            'results' => $results
-        ];
+        return ['messages' => $messages, 'results' => $results];
     }
 
+    public static function upsert_sessions_parameters() {
+        return self::add_sessions_parameters();
+    }
+
+    public static function upsert_sessions_returns() {
+        return self::add_sessions_returns();
+    }
+
+    public static function upsert_sessions($params) {
+        global $DB;
+
+        $params = self::validate_parameters(self::upsert_sessions_parameters(), $params);
+        $results = [];
+        $messages = [];
+
+        foreach ($params['courses'] as $courseData) {
+            $idnumber = $courseData['courseIdNumber'];
+            $course = $DB->get_record('course', ['idnumber' => $idnumber]);
+
+            if (!$course) {
+                $messages[] = "Course '{$idnumber}' not found.";
+                continue;
+            }
+
+            $teachingcourse = local_obu_metalinking_get_teaching_course($course);
+            $attendance = local_attendance_ws_find_attendance_activity($teachingcourse);
+            if (!$attendance) {
+                $messages[] = "No attendance activity for '{$idnumber}'.";
+                continue;
+            }
+
+            $cm = get_coursemodule_from_instance('attendance', $attendance->id);
+            if (!$cm) {
+                $messages[] = "No course module for '{$idnumber}'.";
+                continue;
+            }
+
+            $context = context_module::instance($cm->id);
+            require_capability('mod/attendance:manageattendances', $context);
+            $pluginconfig = get_config('attendance');
+
+            foreach ($courseData['sessions'] as $sdata) {
+                $result = [
+                    'courseIdNumber' => $idnumber,
+                    'slotId' => $sdata['slotId'],
+                    'roomId' => $sdata['roomId'],
+                    'group' => $sdata['group'],
+                    'start' => $sdata['start'],
+                    'duration' => $sdata['duration'],
+                    'status' => false
+                ];
+
+                $existingid = local_attendance_ws_get_session_id($sdata['slotId'], $idnumber);
+
+                try {
+                    if ($existingid > 0) {
+                        $session = $DB->get_record('attendance_sessions', ['id' => $existingid]);
+                        if (!$session) {
+                            throw new moodle_exception("Session ID $existingid not found.");
+                        }
+
+                        $session = \local_attendance_ws\service\session_service::update_session_properties(
+                            $session,
+                            $sdata['start'],
+                            $sdata['duration'],
+                            $sdata['roomId']
+                        );
+
+                        $DB->update_record('attendance_sessions', $session);
+
+                        $event = \mod_attendance\event\session_updated::create([
+                            'objectid' => $session->attendanceid,
+                            'context' => $context,
+                            'other' => [
+                                'info' => construct_session_full_date_time($session->sessdate, $session->duration),
+                                'sessionid' => $session->id,
+                                'action' => \mod_attendance_sessions_page_params::ACTION_UPDATE
+                            ]
+                        ]);
+                        $event->add_record_snapshot('course_modules', $cm);
+                        $event->add_record_snapshot('attendance_sessions', $session);
+                        $event->trigger();
+
+                        $result['sessionId'] = $session->id;
+                        $result['status'] = true;
+                        $result['message'] = "Updated existing session.";
+
+                    } else {
+                        $session = \local_attendance_ws\service\session_service::build_session_object($sdata, $course, $attendance, $pluginconfig);
+                        $session->id = $DB->insert_record('attendance_sessions', $session);
+                        attendance_create_calendar_event($session);
+
+                        $event = \mod_attendance\event\session_added::create([
+                            'objectid' => $attendance->id,
+                            'context' => $context,
+                            'other' => ['info' => construct_session_full_date_time($session->sessdate, $session->duration)]
+                        ]);
+                        $event->add_record_snapshot('course_modules', $cm);
+                        $event->add_record_snapshot('attendance_sessions', $session);
+                        $event->trigger();
+
+                        $result['sessionId'] = $session->id;
+                        $result['status'] = true;
+                        $result['message'] = "Added new session.";
+                    }
+
+                } catch (\Exception $e) {
+                    $result['message'] = "Error during upsert: " . $e->getMessage();
+                }
+
+                $results[] = $result;
+            }
+        }
+
+        return ['messages' => $messages, 'results' => $results];
+    }
 
     // Get settings
     public static function get_settings_parameters() {
