@@ -29,14 +29,18 @@ class session_service {
         $session->calendarevent = 0;
 
         $salt = get_config('local_attendance_ws', 'salt');
-        $session->studentpassword = local_attendance_ws_password_hash($data['slotid'], $data['roomid'], $data['start'], 6, $salt);
-        $session->sessioninstancecode = local_attendance_ws_session_instance_code($data['slotid'], $data['roomid'], $data['start']);
+        $session->studentpassword = local_attendance_ws_password_hash(
+            $data['slotid'], $data['roomid'], $data['start'], 6, $salt
+        );
+        $session->sessioninstancecode = local_attendance_ws_session_instance_code(
+            $data['slotid'], $data['roomid'], $data['start']
+        );
 
         $group = $data['group'];
         $semesterName = $data['semesterName'] ?? null;
         $teachingcourse = local_obu_metalinking_get_teaching_course($course);
 
-        $usergroup = ($group == '0' || $group == '')
+        $usergroup = ($group === '0' || $group === '')
             ? local_obu_group_manager_create_system_group($course, null, null, null, null, $teachingcourse)
             : local_obu_group_manager_create_system_group($course, null, null, $semesterName, $group, $teachingcourse);
 
@@ -61,7 +65,9 @@ class session_service {
         }
 
         if (!empty($session->rotateqrcode)) {
-            $secret = local_attendance_ws_password_hash($data['slotid'], $data['roomid'], $data['start'], 6, $salt);
+            $secret = local_attendance_ws_password_hash(
+                $data['slotid'], $data['roomid'], $data['start'], 6, $salt
+            );
             $session->studentpassword = $secret;
             $session->rotateqrcodesecret = $secret;
         }
@@ -76,5 +82,43 @@ class session_service {
         $session->description = "Room(s): " . $roomid;
         $session->timemodified = time();
         return $session;
+    }
+
+    public static function trigger_session_added_event($attendance, $cm, $context, $session) {
+        $event = \mod_attendance\event\session_added::create([
+            'objectid' => $attendance->id,
+            'context' => $context,
+            'other' => [
+                'info' => construct_session_full_date_time($session->sessdate, $session->duration)
+            ]
+        ]);
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->add_record_snapshot('attendance_sessions', $session);
+        $event->trigger();
+    }
+
+    public static function trigger_session_updated_event($session, $cm, $context) {
+        $event = \mod_attendance\event\session_updated::create([
+            'objectid' => $session->attendanceid,
+            'context' => $context,
+            'other' => [
+                'info' => construct_session_full_date_time($session->sessdate, $session->duration),
+                'sessionid' => $session->id,
+                'action' => \mod_attendance_sessions_page_params::ACTION_UPDATE
+            ]
+        ]);
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->add_record_snapshot('attendance_sessions', $session);
+        $event->trigger();
+    }
+
+    public static function trigger_session_deleted_event($sessionid, $attendanceid, $cm, $context) {
+        $event = \mod_attendance\event\session_deleted::create([
+            'objectid' => $attendanceid,
+            'context' => $context,
+            'other' => ['info' => $sessionid]
+        ]);
+        $event->add_record_snapshot('course_modules', $cm);
+        $event->trigger();
     }
 }
