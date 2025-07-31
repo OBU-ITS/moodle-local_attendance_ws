@@ -1,13 +1,37 @@
 <?php
 
-namespace local_attendance_ws;
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-use external_api;
-use external_function_parameters;
-use external_single_structure;
-use external_multiple_structure;
-use external_value;
-use context_system;
+/*
+ * Attendance web service - external library
+ *
+ * @package    local_attendance_ws
+ * @author     Peter Welham
+ * @copyright  2017, Oxford Brookes University
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ *
+ */
+
+// namespace local_attendance_ws;
+
+//use external_api;
+//use external_function_parameters;
+//use external_single_structure;
+//use external_multiple_structure;
+//use external_value;
+//use context_system;
+//use context_module;
 
 use local_attendance_ws\service\session_manager;
 
@@ -16,8 +40,7 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . "/externallib.php");
 require_once($CFG->dirroot . "/mod/attendance/locallib.php");
 
-class external extends external_api {
-
+class local_attendance_ws_external extends external_api {
     public static function add_session_parameters() {
         return new external_function_parameters([
             'idnumber' => new external_value(PARAM_TEXT),
