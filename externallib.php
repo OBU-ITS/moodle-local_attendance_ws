@@ -154,8 +154,8 @@ class local_attendance_ws_external extends external_api {
                     'courseIdNumber' => new \external_value(PARAM_TEXT),
                     'sessions' => new \external_multiple_structure(
                         new \external_single_structure([
-                            'slotId' => new \external_value(PARAM_TEXT),
-                            'roomId' => new \external_value(PARAM_TEXT),
+                            'slotid' => new \external_value(PARAM_TEXT),
+                            'roomid' => new \external_value(PARAM_TEXT),
                             'group' => new \external_value(PARAM_TEXT),
                             'start' => new \external_value(PARAM_INT),
                             'duration' => new \external_value(PARAM_INT),
@@ -173,14 +173,14 @@ class local_attendance_ws_external extends external_api {
             'results' => new \external_multiple_structure(
                 new \external_single_structure([
                     'courseIdNumber' => new \external_value(PARAM_TEXT),
-                    'slotId' => new \external_value(PARAM_TEXT),
-                    'roomId' => new \external_value(PARAM_TEXT),
+                    'slotid' => new \external_value(PARAM_TEXT),
+                    'roomid' => new \external_value(PARAM_TEXT),
                     'group' => new \external_value(PARAM_TEXT),
                     'start' => new \external_value(PARAM_INT),
                     'duration' => new \external_value(PARAM_INT),
                     'status' => new \external_value(PARAM_BOOL),
                     'message' => new \external_value(PARAM_TEXT, 'Optional message', VALUE_OPTIONAL),
-                    'sessionId' => new \external_value(PARAM_INT, 'Optional session ID', VALUE_OPTIONAL)
+                    'sessionid' => new \external_value(PARAM_INT, 'Optional session ID', VALUE_OPTIONAL)
                 ])
             )
         ]);
@@ -212,7 +212,7 @@ class local_attendance_ws_external extends external_api {
                     $results[] = array_merge($sdata, [
                         'courseIdNumber' => $idnumber,
                         'status' => true,
-                        'sessionId' => $session->id
+                        'sessionid' => $session->id
                     ]);
                 } catch (\Exception $e) {
                     $results[] = array_merge($sdata, [
@@ -245,7 +245,7 @@ class local_attendance_ws_external extends external_api {
             'messages' => new \external_multiple_structure(new \external_value(PARAM_TEXT)),
             'results' => new \external_multiple_structure(
                 new \external_single_structure([
-                    'sessionId' => new \external_value(PARAM_INT),
+                    'sessionid' => new \external_value(PARAM_INT),
                     'status' => new \external_value(PARAM_BOOL),
                     'message' => new \external_value(PARAM_TEXT, 'Optional message', VALUE_OPTIONAL)
                 ])
@@ -271,12 +271,12 @@ class local_attendance_ws_external extends external_api {
             try {
                 \local_attendance_ws\service\session_manager::update_session($sessionid, $data);
                 $results[] = [
-                    'sessionId' => $sessionid,
+                    'sessionid' => $sessionid,
                     'status' => true,
                 ];
             } catch (\Exception $e) {
                 $results[] = [
-                    'sessionId' => $sessionid,
+                    'sessionid' => $sessionid,
                     'status' => false,
                     'message' => $e->getMessage()
                 ];
@@ -297,7 +297,7 @@ class local_attendance_ws_external extends external_api {
             'messages' => new \external_multiple_structure(new \external_value(PARAM_TEXT)),
             'results' => new \external_multiple_structure(
                 new \external_single_structure([
-                    'sessionId' => new \external_value(PARAM_INT),
+                    'sessionid' => new \external_value(PARAM_INT),
                     'status' => new \external_value(PARAM_BOOL),
                     'message' => new \external_value(PARAM_TEXT, 'Optional message', VALUE_OPTIONAL)
                 ])
@@ -316,12 +316,12 @@ class local_attendance_ws_external extends external_api {
             try {
                 \local_attendance_ws\service\session_manager::delete_session($sessionid);
                 $results[] = [
-                    'sessionId' => $sessionid,
+                    'sessionid' => $sessionid,
                     'status' => true,
                 ];
             } catch (\Exception $e) {
                 $results[] = [
-                    'sessionId' => $sessionid,
+                    'sessionid' => $sessionid,
                     'status' => false,
                     'message' => $e->getMessage()
                 ];
@@ -378,7 +378,7 @@ class local_attendance_ws_external extends external_api {
                     $results[] = array_merge($sdata, [
                         'courseIdNumber' => $idnumber,
                         'status' => true,
-                        'sessionId' => $session->id,
+                        'sessionid' => $session->id,
                         'message' => $message
                     ]);
                 } catch (\Exception $e) {
