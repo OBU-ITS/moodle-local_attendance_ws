@@ -225,10 +225,10 @@ class local_attendance_ws_external extends external_api {
         );
     }
 
-    public static function add_sessions($params) {
+    public static function add_sessions($courses) {
         global $DB;
 
-        $params = self::validate_parameters(self::add_sessions_parameters(), $params);
+        $params = self::validate_parameters(self::add_sessions_parameters(), ['courses' => $courses]);
 
         $results = [];
         $messages = [];
