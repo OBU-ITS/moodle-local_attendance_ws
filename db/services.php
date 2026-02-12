@@ -89,6 +89,8 @@ $services = array(
 			'local_attendance_ws_add_session',
 			'local_attendance_ws_update_session',
 			'local_attendance_ws_delete_session',
+            'local_attendance_ws_upsert_sessions',
+            'local_attendance_ws_delete_sessions',
             'local_attendance_ws_get_settings'
 		),
 		'restrictedusers' => 1,
