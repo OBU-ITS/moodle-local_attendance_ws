@@ -34,7 +34,7 @@ require_once($CFG->dirroot . "/local/obu_metalinking/lib.php");
 require_once($CFG->dirroot . "/local/obu_group_manager/lib.php");
 
 class local_attendance_ws_external extends external_api {
-
+    // DEPRECATED - remove after implementation of Upsert
     // Add sessions
     public static function add_session_parameters() {
 		return new external_function_parameters(
@@ -49,7 +49,7 @@ class local_attendance_ws_external extends external_api {
 			)
 		);
 	}
-
+    // DEPRECATED - remove after implementation of Upsert
 	public static function add_session_returns() {
 		return new external_single_structure(
 			array(
@@ -57,7 +57,7 @@ class local_attendance_ws_external extends external_api {
 			)
 		);
 	}
-
+    // DEPRECATED - remove after implementation of Upsert
 	public static function add_session($idnumber, $slotid, $roomid, $group, $start, $duration, $semesterName) {
 		global $DB;
 
@@ -173,7 +173,7 @@ class local_attendance_ws_external extends external_api {
 
 		return array('result' => $session->id);
 	}
-
+    // DEPRECATED - remove after implementation of Upsert
     public static function add_sessions_parameters() {
         return new external_function_parameters(
             array(
@@ -199,7 +199,7 @@ class local_attendance_ws_external extends external_api {
             )
         );
     }
-
+    // DEPRECATED - remove after implementation of Upsert
     public static function add_sessions_returns() {
         return new external_single_structure(
             array(
@@ -224,7 +224,7 @@ class local_attendance_ws_external extends external_api {
             )
         );
     }
-
+    // DEPRECATED - remove after implementation of Upsert
     public static function add_sessions($courses) {
         global $DB;
 
@@ -384,7 +384,7 @@ class local_attendance_ws_external extends external_api {
             'results' => $results
         ];
     }
-
+    // DEPRECATED - remove after implementation of Upsert
     // Update sessions
 	public static function update_session_parameters() {
 		return new external_function_parameters(
@@ -396,7 +396,7 @@ class local_attendance_ws_external extends external_api {
 			)
 		);
 	}
-
+    // DEPRECATED - remove after implementation of Upsert
 	public static function update_session_returns() {
 		return new external_single_structure(
 			array(
@@ -404,7 +404,7 @@ class local_attendance_ws_external extends external_api {
 			)
 		);
 	}
-
+    // DEPRECATED - remove after implementation of Upsert
 	public static function update_session($sessionid, $start, $duration, $roomid) {
 		global $DB;
 
@@ -456,17 +456,26 @@ class local_attendance_ws_external extends external_api {
 
 		return array('result' => $params['sessionid']);
 	}
-
-    public static function update_sessions_parameters() {
+    //TODO :: Upsert functionality
+    public static function upsert_sessions_parameters() {
         return new external_function_parameters(
             array(
-                'sessions' => new external_multiple_structure(
+                'courses' => new external_multiple_structure(
                     new external_single_structure(
                         array(
-                            'sessionid' => new external_value(PARAM_INT, 'Session ID'),
-                            'start' => new external_value(PARAM_INT, 'Session start time'),
-                            'duration' => new external_value(PARAM_INT, 'Session duration'),
-                            'roomid' => new external_value(PARAM_TEXT, 'Room Ids')
+                            'courseIdNumber' => new external_value(PARAM_TEXT, 'Course ID number'),
+                            'sessions' => new external_multiple_structure(
+                                new external_single_structure(
+                                    array(
+                                        'eventIdNumber' => new external_value(PARAM_TEXT, 'Event ID number'),
+                                        'roomId' => new external_value(PARAM_TEXT, 'Room ID'),
+                                        'group' => new external_value(PARAM_TEXT, 'Teaching Group'),
+                                        'start' => new external_value(PARAM_INT, 'Session start timestamp (unix)'),
+                                        'duration' => new external_value(PARAM_INT, 'Session duration in seconds'),
+                                        'semesterName' => new external_value(PARAM_TEXT, 'Semester name'),
+                                    )
+                                )
+                            )
                         )
                     )
                 )
@@ -474,100 +483,22 @@ class local_attendance_ws_external extends external_api {
         );
     }
 
-    public static function update_sessions_returns() {
+    public static function upsert_sessions_returns() {
         return new external_single_structure(
             array(
-                'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, 'General processing messages or warnings')
-                ),
-                'results' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'sessionId' => new external_value(PARAM_TEXT, 'Group ID'),
-                            'status' => new external_value(PARAM_BOOL, 'True if user was removed successfully, false otherwise'),
-                            'message' => new external_value(PARAM_TEXT, 'Optional message about the result', VALUE_OPTIONAL)
-                        )
-                    )
-                )
+                'success' => new external_value(PARAM_BOOL, 'Success to save session')
             )
         );
     }
 
-    public static function update_sessions($params) {
-        global $DB;
-
-        $params = self::validate_parameters(self::update_sessions_parameters(), $params);
-
-        $results = [];
-        $messages = [];
-
-        foreach ($params['sessions'] as $sessionData) {
-            $sessionId = $sessionData['sessionid'];
-            $start = $sessionData['start'];
-            $duration = $sessionData['duration'];
-            $roomId = $sessionData['roomid'];
-
-            $sessionResult = [
-                'sessionId' => $sessionId,
-                'status' => false
-            ];
-
-            if ($sessionId < 1) {
-                $sessionResult['message'] = "Invalid session Id.";
-                $results[] = $sessionResult;
-                continue;
-            }
-
-            if (!($session = $DB->get_record('attendance_sessions', array('id' => $sessionId)))) {
-                $sessionResult['message'] = "Session does not exist.";
-                $results[] = $sessionResult;
-                continue;
-            }
-
-            if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid))) {
-                $sessionResult['message'] = "Course Module (Activity) '{$session->attendanceid}' does not exist.";
-                $results[] = $sessionResult;
-                continue;
-            }
-
-            // Capability checking
-            $context = context_module::instance($cm->id);
-            require_capability('mod/attendance:manageattendances', $context);
-
-            $session->sessdate = $start;
-            $session->duration = $duration;
-            $session->roomid = $roomId;
-            $session->description = "Room(s): " . $roomId;
-            $session->timemodified = time();
-
-            try {
-                $DB->update_record('attendance_sessions', $session);
-
-                $event = \mod_attendance\event\session_updated::create(array(
-                    'objectid' => $session->attendanceid,
-                    'context' => $context,
-                    'other' => array(
-                        'info' => construct_session_full_date_time($session->sessdate, $session->duration),
-                        'sessionid' => $session->id,
-                        'action' => mod_attendance_sessions_page_params::ACTION_UPDATE
-                    )
-                ));
-                $event->add_record_snapshot('course_modules', $cm);
-                $event->add_record_snapshot('attendance_sessions', $session);
-                $event->trigger();
-
-                $sessionResult['status'] = true;
-            }
-            catch (Exception $e) {
-                $sessionResult['message'] = "Error updating user: " . $e->getMessage();
-            }
-
-            $results[] = $sessionResult;
-        }
+    public static function upsert_sessions($params) {
+        $validated = self::validate_parameters(
+            self::upsert_sessions_parameters(),
+            $params
+        );
 
         return [
-            'messages' => $messages,
-            'results' => $results
+            'success' => true
         ];
     }
 
@@ -631,7 +562,6 @@ class local_attendance_ws_external extends external_api {
 
 		return array('result' => $params['sessionid']);
 	}
-
 
     public static function delete_sessions_parameters() {
         return new external_function_parameters(
