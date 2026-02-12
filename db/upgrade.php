@@ -83,5 +83,23 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
         upgrade_plugin_savepoint(true, 2024110102, 'local', 'attendance_ws');
     }
 
+    if($oldversion < 2025073001) {
+        $table = new xmldb_table('local_obu_att_session_lookup');
+
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('slot_id', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('course_id_number', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('session_id', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
+
+        // Conditionally create table
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2025073001, 'local', 'attendance_ws');
+    }
+
     return $result;
 }

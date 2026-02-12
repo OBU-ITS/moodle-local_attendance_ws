@@ -165,3 +165,20 @@ function local_attendance_ws_change_session_course($trace, $fromcourse, $fromact
         $trace->output("Session ($result->id) moved to $tocourse->shortname with group ($group->idnumber).");
     }
 }
+
+function local_attendance_ws_get_session_id($slotid, $courseidnumber) {
+    global $DB;
+
+    $conditions = [
+        'slot_id' => $slotid,
+        'course_id_number' => $courseidnumber
+    ];
+
+    $record = $DB->get_record('local_obu_att_session_lookup', $conditions, 'session_id', IGNORE_MISSING);
+
+    if ($record && !empty($record->session_id)) {
+        return $record->session_id;
+    }
+
+    return 0;
+}
