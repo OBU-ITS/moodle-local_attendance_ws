@@ -47,11 +47,11 @@ $functions = array(
 		'type'        => 'write',
 		'capabilities'=> 'mod/attendance:manageattendances'
 	),
-    'local_attendance_ws_update_sessions' => array(
+    'local_attendance_ws_upsert_sessions' => array(
         'classname'   => 'local_attendance_ws_external',
-        'methodname'  => 'update_sessions',
+        'methodname'  => 'upsert_sessions',
         'classpath'   => 'local/attendance_ws/externallib.php',
-        'description' => 'Updates attendance sessions with the given details. Returns an array.',
+        'description' => 'Inserts new or updates existing attendance sessions with the given details.',
         'type'        => 'write',
         'capabilities'=> 'mod/attendance:manageattendances'
     ),
