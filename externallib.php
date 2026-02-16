@@ -340,10 +340,12 @@ class local_attendance_ws_external extends external_api {
         );
     }
 
-    public static function upsert_sessions($params) {
-        $validated = self::validate_parameters(
+    public static function upsert_sessions($courses) {
+        self::validate_context(context_system::instance());
+
+        $params = self::validate_parameters(
             self::upsert_sessions_parameters(),
-            $params
+            ['courses' => $courses]
         );
 
         return [
