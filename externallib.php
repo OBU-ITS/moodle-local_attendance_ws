@@ -356,57 +356,51 @@ class local_attendance_ws_external extends external_api {
             ['reservations' => $reservations]
         );
 
-        $currentTime = time();
-
-        foreach ($params['reservations'] as $reservation) {
-
-            // check what we have already
-
-            // Look for new, deleted, updated
-
-
-
-            $eventIdNumber = $reservation['eventIdNumber'];
-
-            // Store snapshot of THIS reservation only.
-            $payloadjson = json_encode($reservation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $payloadhash = sha1($payloadjson);
-
-            $existing = $DB->get_record('local_att_ws_reservations', [
-                'eventidnumber' => $eventIdNumber
-            ]);
-
-            if (!$existing) {
-                $record = (object)[
-                    'eventidnumber' => $eventIdNumber,
-                    'payloadjson'   => $payloadjson,
-                    'payloadhash'   => $payloadhash,
-                    'processedhash' => null,
-                    'session_id'    => null,
-                    'is_processed'  => 0,
-                    'is_delete'     => 0,
-                    'timecreated'   => $currentTime,
-                    'timemodified'  => $currentTime,
-                ];
-                $DB->insert_record('local_att_ws_reservations', $record);
-
-            } else {
-                $update = (object)[
-                    'id'           => $existing->id,
-                    'payloadjson'  => $payloadjson,
-                    'payloadhash'  => $payloadhash,
-                    'is_delete'    => 0,
-                    'timemodified' => $currentTime,
-                ];
-
-                // Only queue the scheduled task if changed.
-                if ($existing->payloadhash !== $payloadhash) {
-                    $update->is_processed = 0;
-                }
-
-                $DB->update_record('local_att_ws_reservations', $update);
-            }
-        }
+//        $currentTime = time();
+//
+//        foreach ($params['reservations'] as $reservation) {
+//
+//            $eventIdNumber = $reservation['eventIdNumber'];
+//
+//            // Store snapshot of THIS reservation only.
+//            $payloadjson = json_encode($reservation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+//            $payloadhash = sha1($payloadjson);
+//
+//            $existing = $DB->get_record('local_att_ws_reservations', [
+//                'eventidnumber' => $eventIdNumber
+//            ]);
+//
+//            if (!$existing) {
+//                $record = (object)[
+//                    'eventidnumber' => $eventIdNumber,
+//                    'payloadjson'   => $payloadjson,
+//                    'payloadhash'   => $payloadhash,
+//                    'processedhash' => null,
+//                    'session_id'    => null,
+//                    'is_processed'  => 0,
+//                    'is_delete'     => 0,
+//                    'timecreated'   => $currentTime,
+//                    'timemodified'  => $currentTime,
+//                ];
+//                $DB->insert_record('local_att_ws_reservations', $record);
+//
+//            } else {
+//                $update = (object)[
+//                    'id'           => $existing->id,
+//                    'payloadjson'  => $payloadjson,
+//                    'payloadhash'  => $payloadhash,
+//                    'is_delete'    => 0,
+//                    'timemodified' => $currentTime,
+//                ];
+//
+//                // Only queue the scheduled task if changed.
+//                if ($existing->payloadhash !== $payloadhash) {
+//                    $update->is_processed = 0;
+//                }
+//
+//                $DB->update_record('local_att_ws_reservations', $update);
+//            }
+//        }
 
         return [
             'success' => true
