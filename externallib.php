@@ -359,6 +359,13 @@ class local_attendance_ws_external extends external_api {
         $currentTime = time();
 
         foreach ($params['reservations'] as $reservation) {
+
+            // check what we have already
+
+            // Look for new, deleted, updated
+
+
+
             $eventIdNumber = $reservation['eventIdNumber'];
 
             // Store snapshot of THIS reservation only.

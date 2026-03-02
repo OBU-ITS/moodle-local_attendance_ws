@@ -7,7 +7,8 @@
         <TABLE NAME="local_obu_att_session_lookup" COMMENT="Table for storing attendance session ids for lookup">
             <FIELDS>
                 <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-                <FIELD NAME="slot_id" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="slot_id" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"/> <!-- Change to eventidnumber -->
+                <!-- New field: Group Id number? -->
                 <FIELD NAME="course_id_number" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"/>
                 <FIELD NAME="session_id" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"/>
             </FIELDS>
@@ -23,7 +24,7 @@
                 <FIELD NAME="payloadjson" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
                 <FIELD NAME="payloadhash" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
                 <FIELD NAME="processedhash" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false"/>
-                <FIELD NAME="session_id" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="session_id" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/> <!-- Remove session Id -->
                 <FIELD NAME="is_processed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
                 <FIELD NAME="is_delete" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
                 <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
