@@ -358,52 +358,16 @@ class local_attendance_ws_external extends external_api {
 
         $currentTime = time();
 
-        // Group payload by eventIdNumber.
-        // $byevent[eventIdNumber][courseIdNumber][] = session
-        $byevent = [];
+        foreach ($params['reservations'] as $reservation) {
+            $eventIdNumber = $reservation['eventIdNumber'];
 
-        foreach ($params['courses'] as $course) {
-            $courseIdNumber = $course['courseIdNumber'];
-
-            foreach ($course['sessions'] as $session) {
-                $eventIdNumber = $session['eventIdNumber'];
-
-                if (!isset($byevent[$eventIdNumber])) {
-                    $byevent[$eventIdNumber] = [];
-                }
-                if (!isset($byevent[$eventIdNumber][$courseIdNumber])) {
-                    $byevent[$eventIdNumber][$courseIdNumber] = [];
-                }
-
-                // Keep everything you receive for this reservation.
-                $byevent[$eventIdNumber][$courseIdNumber][] = $session;
-            }
-        }
-
-        // Upsert one DB row per eventIdNumber.
-        foreach ($byevent as $eventIdNumber => $coursesmap) {
-
-            // Build a stable snapshot structure for this eventIdNumber.
-            $snapshotcourses = [];
-            foreach ($coursesmap as $courseIdNumber => $sessions) {
-                $snapshotcourses[] = [
-                    'courseIdNumber' => $courseIdNumber,
-                    'sessions' => array_values($sessions),
-                ];
-            }
-
-            // Optional: sort courses for stable JSON/hash.
-            usort($snapshotcourses, fn($a, $b) => strcmp($a['courseIdNumber'], $b['courseIdNumber']));
-
-            $snapshot = [
-                'eventIdNumber' => $eventIdNumber,
-                'courses' => $snapshotcourses,
-            ];
-
-            $payloadjson = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            // Store snapshot of THIS reservation only.
+            $payloadjson = json_encode($reservation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $payloadhash = sha1($payloadjson);
 
-            $existing = $DB->get_record('local_att_ws_reservations', ['eventidnumber' => $eventIdNumber]);
+            $existing = $DB->get_record('local_att_ws_reservations', [
+                'eventidnumber' => $eventIdNumber
+            ]);
 
             if (!$existing) {
                 $record = (object)[
@@ -428,7 +392,7 @@ class local_attendance_ws_external extends external_api {
                     'timemodified' => $currentTime,
                 ];
 
-                // Only re-queue processing if the snapshot changed.
+                // Only queue the scheduled task if changed.
                 if ($existing->payloadhash !== $payloadhash) {
                     $update->is_processed = 0;
                 }
