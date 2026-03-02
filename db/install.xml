@@ -15,5 +15,31 @@
                 <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
             </KEYS>
         </TABLE>
+
+        <TABLE NAME="local_att_ws_reservations" COMMENT="Stores current state of TimeEdit reservations and Moodle session mapping">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="eventidnumber" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="payloadjson" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="payloadhash" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="processedhash" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="session_id" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="is_processed" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+                <FIELD NAME="is_delete" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+                <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+                <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+            </FIELDS>
+
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+                <KEY NAME="uniq_eventidnumber" TYPE="unique" FIELDS="eventidnumber"/>
+            </KEYS>
+
+            <INDEXES>
+                <INDEX NAME="idx_processed" UNIQUE="false" FIELDS="is_processed"/>
+                <INDEX NAME="idx_sessionid" UNIQUE="false" FIELDS="session_id"/>
+            </INDEXES>
+        </TABLE>
+
     </TABLES>
 </XMLDB>
