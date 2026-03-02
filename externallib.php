@@ -309,19 +309,25 @@ class local_attendance_ws_external extends external_api {
     public static function upsert_sessions_parameters() {
         return new external_function_parameters(
             array(
-                'courses' => new external_multiple_structure(
+                'reservations' => new external_multiple_structure(
                     new external_single_structure(
                         array(
-                            'courseIdNumber' => new external_value(PARAM_TEXT, 'Course ID number'),
-                            'sessions' => new external_multiple_structure(
+                            'eventIdNumber' => new external_value(PARAM_TEXT, 'Event ID number'),
+                            'roomId' => new external_value(PARAM_TEXT, 'Room ID(s)'),
+                            'start' => new external_value(PARAM_TEXT, 'Session Start'),
+                            'duration' => new external_value(PARAM_TEXT, 'Session Duration'),
+                            'courses' => new external_multiple_structure(
                                 new external_single_structure(
                                     array(
-                                        'eventIdNumber' => new external_value(PARAM_TEXT, 'Event ID number'),
-                                        'roomId' => new external_value(PARAM_TEXT, 'Room ID'),
-                                        'group' => new external_value(PARAM_TEXT, 'Teaching Group'),
-                                        'start' => new external_value(PARAM_INT, 'Session start timestamp (unix)'),
-                                        'duration' => new external_value(PARAM_INT, 'Session duration in seconds'),
-                                        'semesterName' => new external_value(PARAM_TEXT, 'Semester name'),
+                                        'courseIdNumber' => new external_value(PARAM_TEXT, 'Course ID number'),
+                                        'groups' => new external_multiple_structure(
+                                            new external_single_structure(
+                                                array(
+                                                    'name' => new external_value(PARAM_TEXT, 'Group Name'),
+                                                    'semesterName' => new external_value(PARAM_TEXT, 'Group Semester Name'),
+                                                )
+                                            )
+                                        )
                                     )
                                 )
                             )
@@ -340,14 +346,14 @@ class local_attendance_ws_external extends external_api {
         );
     }
 
-    public static function upsert_sessions($courses) {
+    public static function upsert_sessions($reservations) {
         global $DB;
 
         self::validate_context(context_system::instance());
 
         $params = self::validate_parameters(
             self::upsert_sessions_parameters(),
-            ['courses' => $courses]
+            ['reservations' => $reservations]
         );
 
         $currentTime = time();
