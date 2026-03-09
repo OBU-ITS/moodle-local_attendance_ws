@@ -83,35 +83,41 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
         upgrade_plugin_savepoint(true, 2024110102, 'local', 'attendance_ws');
     }
 
-    if($oldversion < 2025073001) {
-        $table = new xmldb_table('local_obu_att_session_lookup');
+    if ($oldversion < 2026030900) {
+
+        // Table: local_obu_att_ws_sessions.
+        $table = new xmldb_table('local_obu_att_ws_sessions');
 
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
-        $table->add_field('slot_id', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('course_id_number', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('session_id', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('eventidnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('courseidnumber', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('groupname', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('semestername', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('session_id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
 
-        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname']);
 
-        // Conditionally create table
+        $table->add_index('idx_eventidnumber', XMLDB_INDEX_NOTUNIQUE, ['eventidnumber']);
+
         if (!$dbman->table_exists($table)) {
             $dbman->create_table($table);
         }
 
-        upgrade_plugin_savepoint(true, 2025073001, 'local', 'attendance_ws');
-    }
-
-    if ($oldversion < 2026022500) {
-        $table = new xmldb_table('local_att_ws_reservations');
+        // Table: local_obu_att_ws_reservation.
+        $table = new xmldb_table('local_obu_att_ws_reservation');
 
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
-        $table->add_field('eventidnumber', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('eventidnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('roomid', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('start', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('duration', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_field('payloadjson', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
         $table->add_field('payloadhash', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('processedhash', XMLDB_TYPE_CHAR, '40', null, null, null, null);
         $table->add_field('is_delete', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
         $table->add_field('is_processed', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('session_id', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
         $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
         $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
 
@@ -119,14 +125,12 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
         $table->add_key('uniq_eventidnumber', XMLDB_KEY_UNIQUE, ['eventidnumber']);
 
         $table->add_index('idx_processed', XMLDB_INDEX_NOTUNIQUE, ['is_processed']);
-        $table->add_index('idx_sessionid', XMLDB_INDEX_NOTUNIQUE, ['session_id']);
-
 
         if (!$dbman->table_exists($table)) {
             $dbman->create_table($table);
         }
 
-        upgrade_plugin_savepoint(true, 2026022500, 'local', 'attendance_ws');
+        upgrade_plugin_savepoint(true, 2026030900, 'local', 'attendance_ws');
     }
 
     return $result;
