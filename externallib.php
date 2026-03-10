@@ -401,7 +401,7 @@ class local_attendance_ws_external extends external_api {
                     $update->is_processed = 0;
                 }
 
-                $DB->update_record('local_att_ws_reservations', $update);
+                $DB->update_record('local_obu_att_ws_reservation', $update);
             }
         }
 
