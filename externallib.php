@@ -390,6 +390,9 @@ class local_attendance_ws_external extends external_api {
             } else {
                 $update = (object)[
                     'id'           => $existing->id,
+                    'roomid'        => $roomId,
+                    'start'         => $start,
+                    'duration'      => $duration,
                     'payloadjson'  => $payloadjson,
                     'payloadhash'  => $payloadhash,
                     'is_delete'    => 0,
