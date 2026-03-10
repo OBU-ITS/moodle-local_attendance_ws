@@ -370,7 +370,7 @@ class local_attendance_ws_external extends external_api {
 
             $existing = $DB->get_record('local_obu_att_ws_reservation', [
                 'eventidnumber' => $eventIdNumber
-            ]);
+            ], '*', IGNORE_MISSING);
 
             if (!$existing) {
                 $record = (object)[
