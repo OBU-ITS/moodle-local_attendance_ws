@@ -58,7 +58,67 @@ class process_reservations_service {
     public function process_reservations(\progress_trace $trace, $unprocessedReservations) {
         global $DB;
         foreach ($unprocessedReservations as $unprocessedReservation) {
-            //TODO:: code in here use locallib functions maybe?
+            $payload = json_decode($unprocessedReservation->payloadjson, true);
+
+            $newitems = [];
+            foreach ($payload['courses'] as $course) {
+                foreach ($course['groups'] as $group) {
+                    $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
+                    $newitems[$key] = [
+                        'eventidnumber' => $unprocessedReservation->eventidnumber,
+                        'courseidnumber' => $course['courseIdNumber'],
+                        'groupname' => $group['name'],
+                        'semestername' => $group['semesterName'],
+                    ];
+                }
+            }
+
+            $oldsessionrows = $DB->get_records('local_obu_att_ws_sessions', [
+                'eventidnumber' => $unprocessedReservation->eventidnumber
+            ]);
+
+            $olditems = [];
+            foreach ($oldsessionrows as $row) {
+                $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname;
+                $olditems[$key] = $row;
+            }
+
+            $deletekeys = array_diff(array_keys($olditems), array_keys($newitems));
+            $createkeys = array_diff(array_keys($newitems), array_keys($olditems));
+            $commonkeys = array_intersect(array_keys($olditems), array_keys($newitems));
+
+            foreach ($deletekeys as $key) {
+                $old = $olditems[$key];
+                // delete Moodle session using $old->session_id
+                // delete lookup row
+            }
+
+            foreach ($createkeys as $key) {
+                $new = $newitems[$key];
+                // create Moodle session
+                // insert lookup row with returned session_id
+            }
+
+            foreach ($commonkeys as $key) {
+                $old = $olditems[$key];
+                $new = $newitems[$key];
+
+                $needsupdate = false;
+
+                if ($old->semestername !== $new['semestername']) {
+                    $needsupdate = true;
+                }
+
+                // reservation-level changes also matter
+                // if room/start/duration changed, you may decide all common rows need update
+
+                if ($needsupdate) {
+                    // update Moodle session using $old->session_id
+                    // update lookup row if needed
+                }
+            }
+
+            // mark reservation processed
         }
     }
 
