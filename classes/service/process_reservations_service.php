@@ -103,19 +103,12 @@ class process_reservations_service {
                 $old = $olditems[$key];
                 $new = $newitems[$key];
 
-                $needsupdate = false;
-
-                if ($old->semestername !== $new['semestername']) {
-                    $needsupdate = true;
+                if (($old->start == $new['start']) && ($old->duration == $new['duration']) && ($old->roomid == $new['roomId'])) {
+                    continue;
                 }
 
-                // reservation-level changes also matter
-                // if room/start/duration changed, you may decide all common rows need update
-
-                if ($needsupdate) {
-                    // update Moodle session using $old->session_id
-                    // update lookup row if needed
-                }
+                // update Moodle session using $old->session_id
+                // update lookup row
             }
 
             // mark reservation processed
