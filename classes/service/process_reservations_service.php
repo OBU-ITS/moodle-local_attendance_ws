@@ -170,7 +170,6 @@ class process_reservations_service {
                 if (
                     $old['start'] == $new['start'] &&
                     $old['duration'] == $new['duration'] &&
-                    $old['semestername'] == $new['semestername'] &&
                     $old['roomid'] == $new['roomid']
                 ) {
                     continue;
