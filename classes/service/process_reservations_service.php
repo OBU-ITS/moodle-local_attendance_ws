@@ -63,9 +63,12 @@ class process_reservations_service {
             $newitems = [];
             foreach ($payload['courses'] as $course) {
                 foreach ($course['groups'] as $group) {
-                    $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
+                    $key = $unprocessedReservation->eventIdNumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
                     $newitems[$key] = [
                         'eventidnumber' => $unprocessedReservation->eventidnumber,
+                        'start' => $unprocessedReservation->start,
+                        'duration' => $unprocessedReservation->duration,
+                        'roomid' => $unprocessedReservation->roomid,
                         'courseidnumber' => $course['courseIdNumber'],
                         'groupname' => $group['name'],
                         'semestername' => $group['semesterName'],
@@ -79,8 +82,22 @@ class process_reservations_service {
 
             $olditems = [];
             foreach ($oldsessionrows as $row) {
+                $attendancesession = $DB->get_record('attendance_sessions', [
+                    'id' => $row->session_id
+                ], '*', IGNORE_MISSING);
+
                 $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname;
-                $olditems[$key] = $row;
+
+                $olditems[$key] = [
+                    'eventidnumber' => $row->eventidnumber,
+                    'start' => $attendancesession ? $attendancesession->sessdate : null,
+                    'duration' => $attendancesession ? $attendancesession->duration : null,
+                    'roomid' => $attendancesession ? $attendancesession->roomid : null,
+                    'courseidnumber' => $row->courseidnumber,
+                    'groupname' => $row->groupname,
+                    'semestername' => $row->semestername,
+                    'session_id' => $row->session_id,
+                ];
             }
 
             $deletekeys = array_diff(array_keys($olditems), array_keys($newitems));
@@ -89,29 +106,110 @@ class process_reservations_service {
 
             foreach ($deletekeys as $key) {
                 $old = $olditems[$key];
+
+                $trace->output("Deleting session for key {$key} using Moodle session ID {$old['session_id']}");
+
                 // delete Moodle session using $old->session_id
+                $result = local_attendance_ws_delete_session($old['session_id']);
+
+                if (!isset($result['result']) || (int)$result['result'] <= 0) {
+                    $trace->output("Failed to delete Moodle session {$old['session_id']} for {$key}");
+                    continue;
+                }
+
                 // delete lookup row
+                $DB->delete_records('local_obu_att_ws_sessions', [
+                    'eventidnumber' => $old['eventidnumber'],
+                    'courseidnumber' => $old['courseidnumber'],
+                    'groupname' => $old['groupname'],
+                ]);
+
+                $trace->output("Deleted Moodle session {$old['session_id']} and removed lookup row for {$key}");
             }
 
+            //Create session in Moodle
             foreach ($createkeys as $key) {
                 $new = $newitems[$key];
-                // create Moodle session
+
+                $trace->output("Creating Moodle session for {$key}");
+
+                $result = local_attendance_ws_create_session(
+                    $new['courseidnumber'],
+                    (string)$new['eventidnumber'],
+                    $new['roomid'],
+                    $new['groupname'],
+                    (int)$new['start'],
+                    (int)$new['duration'],
+                    $new['semestername']
+                );
+
+                if (!isset($result['result']) || (int)$result['result'] <= 0) {
+                    $trace->output("Failed to create Moodle session for {$key}");
+                    continue;
+                }
+
                 // insert lookup row with returned session_id
+                $lookuprecord = new \stdClass();
+                $lookuprecord->eventidnumber = $new['eventidnumber'];
+                $lookuprecord->courseidnumber = $new['courseidnumber'];
+                $lookuprecord->groupname = $new['groupname'];
+                $lookuprecord->semestername = $new['semestername'];
+                $lookuprecord->session_id = (int)$result['result'];
+                $lookuprecord->timecreated = time();
+                $lookuprecord->timemodified = time();
+
+                $DB->insert_record('local_obu_att_ws_sessions', $lookuprecord);
+
+                $trace->output("Created Moodle session {$lookuprecord->session_id} for {$key}");
             }
 
             foreach ($commonkeys as $key) {
                 $old = $olditems[$key];
                 $new = $newitems[$key];
 
-                if (($old->start == $new['start']) && ($old->duration == $new['duration']) && ($old->roomid == $new['roomId'])) {
+                if (
+                    $old['start'] == $new['start'] &&
+                    $old['duration'] == $new['duration'] &&
+                    $old['semestername'] == $new['semestername'] &&
+                    $old['roomid'] == $new['roomid']
+                ) {
                     continue;
                 }
 
                 // update Moodle session using $old->session_id
+                $trace->output("Updating Moodle session {$old['session_id']} for {$key}");
+
+                $result = local_attendance_ws_update_session(
+                    (int)$old['session_id'],
+                    (int)$new['start'],
+                    (int)$new['duration'],
+                    $new['roomid']
+                );
+
+                if (!isset($result['result']) || (int)$result['result'] <= 0) {
+                    $trace->output("Failed to update Moodle session {$old['session_id']} for {$key}");
+                    continue;
+                }
+
                 // update lookup row
+                $updatelookup = new \stdClass();
+                $updatelookup->id = $old['id'];
+                $updatelookup->semestername = $new['semestername'];
+                $updatelookup->timemodified = time();
+
+                $DB->update_record('local_obu_att_ws_sessions', $updatelookup);
+
+                $trace->output("Updated Moodle session {$old['session_id']} for {$key}");
             }
 
+            //TODO:: Get reservation from our table where id is unprocessedReservation->id and compare hashes, if the same then make is processed and time updates, if not then continue.
             // mark reservation processed
+            $updatereservation = new \stdClass();
+            $updatereservation->id = $unprocessedReservation->id;
+            $updatereservation->is_processed = 1;
+            $updatereservation->timemodified = time();
+
+            $DB->update_record('local_obu_att_ws_reservation', $updatereservation);
         }
     }
 
