@@ -201,8 +201,16 @@ class process_reservations_service {
                 $trace->output("Updated Moodle session {$old['session_id']} for {$key}");
             }
 
-            //TODO:: Get reservation from our table where id is unprocessedReservation->id and compare hashes, if the same then make is processed and time updates, if not then continue.
-            // mark reservation processed
+            // check that reservation has not been updated while we were acting on changes, if so leave is_processed alone
+            $currentreservation = $DB->get_record('local_obu_att_ws_reservation', [
+                'id' => $unprocessedReservation->id
+            ], 'id, payloadhash', IGNORE_MISSING);
+
+            if ($currentreservation->payloadhash !== $unprocessedReservation->payloadhash) {
+                $trace->output("Reservation {$unprocessedReservation->eventidnumber} changed during processing, leaving as unprocessed.");
+                continue;
+            }
+
             $updatereservation = new \stdClass();
             $updatereservation->id = $unprocessedReservation->id;
             $updatereservation->is_processed = 1;
