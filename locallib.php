@@ -28,7 +28,9 @@ defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/local/obu_metalinking/lib.php');
 require_once($CFG->dirroot . '/local/obu_group_manager/lib.php');
+require_once($CFG->dirroot . '/mod/attendance/locallib.php');
 require_once($CFG->dirroot . "/course/modlib.php");
+require_once($CFG->dirroot . '/group/lib.php');
 
 function local_attendance_ws_password_hash($slotid, $roomid, $eventdate, $length, $salt = ""): string
 {
