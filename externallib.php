@@ -265,9 +265,9 @@ class local_attendance_ws_external extends external_api {
     public static function delete_sessions_parameters() {
         return new external_function_parameters(
             array(
-                'sessions' => new external_multiple_structure(
-                    new external_value(PARAM_INT, 'Session ID'),
-                    'Array of Session IDs'
+                'eventIdNumbers' => new external_multiple_structure(
+                    new external_value(PARAM_INT, 'Reservation Event ID Number'),
+                    'Array of reservation event ID numbers'
                 )
             )
         );
@@ -282,7 +282,7 @@ class local_attendance_ws_external extends external_api {
                 'results' => new external_multiple_structure(
                     new external_single_structure(
                         array(
-                            'sessionId' => new external_value(PARAM_TEXT, 'Session ID'),
+                            'eventIdNumber' => new external_value(PARAM_TEXT, 'Reservation Event ID Number'),
                             'status' => new external_value(PARAM_BOOL, 'True if user was deleted successfully, false otherwise'),
                             'message' => new external_value(PARAM_TEXT, 'Optional message about the result', VALUE_OPTIONAL)
                         )
@@ -292,61 +292,80 @@ class local_attendance_ws_external extends external_api {
         );
     }
 
-    public static function delete_sessions($params) {
+    public static function delete_sessions($eventidnumbers) {
         global $DB;
 
-        $params = self::validate_parameters(self::delete_sessions_parameters(), $params);
+        self::validate_context(context_system::instance());
 
-        $results = [];
+        $params = self::validate_parameters(
+            self::delete_sessions_parameters(),
+            array(
+                'eventIdNumbers' => $eventidnumbers
+            )
+        );
+
         $messages = [];
+        $results = [];
 
-        foreach ($params['sessions'] as $sessionsId) {
-            $sessionResult = [
-                'sessionId' => $sessionsId,
-                'status' => false
-            ];
+        foreach ($params['eventIdNumbers'] as $eventidnumber) {
+            $status = true;
+            $messageparts = [];
 
-            if (!($session = $DB->get_record('attendance_sessions', array('id' => $sessionsId)))) {
-                $sessionResult['message'] = "Session '{$sessionsId}' does not exist.";
-                $results[] = $sessionResult;
+            // Get all Moodle session mappings for this reservation.
+            $lookups = $DB->get_records('local_obu_att_ws_sessions', array(
+                'eventidnumber' => $eventidnumber
+            ));
+
+            if (empty($lookups)) {
+                $results[] = array(
+                    'eventIdNumber' => $eventidnumber,
+                    'status' => false,
+                    'message' => 'No lookup records found for this eventidnumber'
+                );
                 continue;
             }
 
-            if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false))) {
-                $sessionResult['message'] = "Course Module (Activity) '{$session->attendanceid}' does not exist.";
-                $results[] = $sessionResult;
-                continue;
-            }
+            foreach ($lookups as $lookup) {
+                $result = local_attendance_ws_delete_session((int)$lookup->session_id);
 
-            // Capability checking
-            $context = context_module::instance($cm->id);
-            require_capability('mod/attendance:manageattendances', $context);
+                if (!isset($result['result']) || (int)$result['result'] <= 0) {
+                    $status = false;
+                    $messageparts[] = 'Failed to delete Moodle session ' . $lookup->session_id;
+                    continue;
+                }
 
-            if ($session->caleventid) {
-                attendance_delete_calendar_events(array($sessionsId));
-            }
-
-            try {
-                $DB->delete_records('attendance_log', array('sessionid' => $sessionsId));
-                $DB->delete_records('attendance_sessions', array('id' => $sessionsId));
-                $event = \mod_attendance\event\session_deleted::create(array(
-                    'objectid' => $session->attendanceid,
-                    'context' => $context,
-                    'other' => array('info' => $sessionsId)
+                // Remove lookup row only if Moodle delete succeeded.
+                $DB->delete_records('local_obu_att_ws_sessions', array(
+                    'id' => $lookup->id
                 ));
-                $event->add_record_snapshot('course_modules', $cm);
-                $event->trigger();
-            } catch (Exception $e) {
-                $sessionResult['message'] = "Error deleting session: " . $e->getMessage();
             }
 
-            $results[] = $sessionResult;
+            // If everything deleted successfully, remove reservation row too.
+            if ($status) {
+                $DB->delete_records('local_obu_att_ws_reservation', array(
+                    'eventIdNumber' => $eventidnumber
+                ));
+                $messageparts[] = 'Deleted reservation and all mapped sessions';
+            } else {
+                $messageparts[] = 'Some sessions could not be deleted';
+            }
+
+            $results[] = array(
+                'eventIdNumber' => $eventidnumber,
+                'status' => $status,
+                'message' => implode('; ', $messageparts)
+            );
         }
 
-        return [
+        if (empty($results)) {
+            $messages[] = 'No eventidnumbers were processed.';
+        }
+
+        return array(
             'messages' => $messages,
             'results' => $results
-        ];
+        );
+
     }
 
     // Get settings
