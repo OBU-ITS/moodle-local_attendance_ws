@@ -26,7 +26,7 @@ defined('MOODLE_INTERNAL') || die();
 
 $tasks = [
     [
-        'classname' => 'local_obu_attendance_ws\task\process_reservations',
+        'classname' => 'local_attendance_ws\task\process_reservations',
         'blocking' => 0,
         'minute' => '45',
         'hour' => '17',
