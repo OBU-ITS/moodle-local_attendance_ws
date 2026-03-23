@@ -276,18 +276,7 @@ class local_attendance_ws_external extends external_api {
     public static function delete_sessions_returns() {
         return new external_single_structure(
             array(
-                'messages' => new external_multiple_structure(
-                    new external_value(PARAM_TEXT, 'General processing messages or warnings')
-                ),
-                'results' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'eventIdNumber' => new external_value(PARAM_TEXT, 'Reservation Event ID Number'),
-                            'status' => new external_value(PARAM_BOOL, 'True if user was deleted successfully, false otherwise'),
-                            'message' => new external_value(PARAM_TEXT, 'Optional message about the result', VALUE_OPTIONAL)
-                        )
-                    )
-                )
+                'success' => new external_value(PARAM_BOOL, 'True if the delete requests were queued successfully')
             )
         );
     }
@@ -304,68 +293,50 @@ class local_attendance_ws_external extends external_api {
             )
         );
 
-        $messages = [];
-        $results = [];
+        $currenttime = time();
 
         foreach ($params['eventIdNumbers'] as $eventidnumber) {
-            $status = true;
-            $messageparts = [];
-
-            // Get all Moodle session mappings for this reservation.
-            $lookups = $DB->get_records('local_obu_att_ws_sessions', array(
-                'eventidnumber' => $eventidnumber
-            ));
-
-            if (empty($lookups)) {
-                $results[] = array(
-                    'eventIdNumber' => $eventidnumber,
-                    'status' => false,
-                    'message' => 'No lookup records found for this eventidnumber'
-                );
-                continue;
-            }
-
-            foreach ($lookups as $lookup) {
-                $result = local_attendance_ws_delete_session((int)$lookup->session_id);
-
-                if (!isset($result['result']) || (int)$result['result'] <= 0) {
-                    $status = false;
-                    $messageparts[] = 'Failed to delete Moodle session ' . $lookup->session_id;
-                    continue;
-                }
-
-                // Remove lookup row only if Moodle delete succeeded.
-                $DB->delete_records('local_obu_att_ws_sessions', array(
-                    'id' => $lookup->id
-                ));
-            }
-
-            // If everything deleted successfully, remove reservation row too.
-            if ($status) {
-                $DB->delete_records('local_obu_att_ws_reservation', array(
-                    'eventIdNumber' => $eventidnumber
-                ));
-                $messageparts[] = 'Deleted reservation and all mapped sessions';
-            } else {
-                $messageparts[] = 'Some sessions could not be deleted';
-            }
-
-            $results[] = array(
-                'eventIdNumber' => $eventidnumber,
-                'status' => $status,
-                'message' => implode('; ', $messageparts)
+            $payloadjson = json_encode(
+                ['eventIdNumber' => $eventidnumber],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
             );
+            $payloadhash = sha1($payloadjson);
+
+            $existing = $DB->get_record('local_obu_att_ws_reservation', [
+                'eventidnumber' => $eventidnumber
+            ]);
+
+            if (!$existing) {
+                $record = (object)[
+                    'eventidnumber' => $eventidnumber,
+                    'roomid' => '',
+                    'start' => 0,
+                    'duration' => 0,
+                    'payloadjson' => $payloadjson,
+                    'payloadhash' => $payloadhash,
+                    'is_delete' => 1,
+                    'is_processed' => 0,
+                    'timecreated' => $currenttime,
+                    'timemodified' => $currenttime,
+                ];
+
+                $DB->insert_record('local_obu_att_ws_reservation', $record);
+            } else {
+                $update = new \stdClass();
+                $update->id = $existing->id;
+                $update->payloadjson = $payloadjson;
+                $update->payloadhash = $payloadhash;
+                $update->is_delete = 1;
+                $update->is_processed = 0;
+                $update->timemodified = $currenttime;
+
+                $DB->update_record('local_obu_att_ws_reservation', $update);
+            }
         }
 
-        if (empty($results)) {
-            $messages[] = 'No eventidnumbers were processed.';
-        }
-
-        return array(
-            'messages' => $messages,
-            'results' => $results
-        );
-
+        return [
+            'success' => true
+        ];
     }
 
     // Get settings
