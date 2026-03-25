@@ -113,7 +113,7 @@ class process_reservations_service {
                 $result = local_attendance_ws_delete_session($old['session_id']);
 
                 if (!isset($result['result']) || (int)$result['result'] <= 0) {
-                    $trace->output("Failed to delete Moodle session {$old['session_id']} for {$key}");
+                    $trace->output("Failed to delete Moodle session {$old['session_id']} for {$key} with result: {$result['result']}");
                     continue;
                 }
 
@@ -144,7 +144,7 @@ class process_reservations_service {
                 );
 
                 if (!isset($result['result']) || (int)$result['result'] <= 0) {
-                    $trace->output("Failed to create Moodle session for {$key}");
+                    $trace->output("Failed to create Moodle session for {$key} with result: {$result['result']}");
                     continue;
                 }
 
@@ -186,7 +186,7 @@ class process_reservations_service {
                 );
 
                 if (!isset($result['result']) || (int)$result['result'] <= 0) {
-                    $trace->output("Failed to update Moodle session {$old['session_id']} for {$key}");
+                    $trace->output("Failed to update Moodle session {$old['session_id']} for {$key} with result: {$result['result']}");
                     continue;
                 }
 
