@@ -63,7 +63,7 @@ class process_reservations_service {
             $newitems = [];
             foreach ($payload['courses'] as $course) {
                 foreach ($course['groups'] as $group) {
-                    $key = $unprocessedReservation->eventIdNumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
+                    $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
                     $newitems[$key] = [
                         'eventidnumber' => $unprocessedReservation->eventidnumber,
                         'start' => $unprocessedReservation->start,
