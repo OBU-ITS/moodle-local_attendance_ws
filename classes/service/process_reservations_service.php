@@ -89,6 +89,7 @@ class process_reservations_service {
                 $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname;
 
                 $olditems[$key] = [
+                    'id' => $row->id,
                     'eventidnumber' => $row->eventidnumber,
                     'start' => $attendancesession ? $attendancesession->sessdate : null,
                     'duration' => $attendancesession ? $attendancesession->duration : null,
