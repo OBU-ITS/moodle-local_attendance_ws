@@ -29,6 +29,7 @@ global $CFG;
 require_once($CFG->dirroot . '/local/obu_metalinking/lib.php');
 require_once($CFG->dirroot . '/local/obu_group_manager/lib.php');
 require_once($CFG->dirroot . '/mod/attendance/locallib.php');
+require_once($CFG->dirroot . '/mod/attendance/lib.php');
 require_once($CFG->dirroot . "/course/modlib.php");
 require_once($CFG->dirroot . '/group/lib.php');
 
