@@ -38,6 +38,7 @@ class process_reservations_handler {
 
     public function handle_process_reservations() {
         $unprocessedReservations = $this->process_reservations_service->get_unprocessed_reservations();
+
         if (count($unprocessedReservations) == 0) {
             $this->trace->output("No unprocessed reservations found.");
         } else {

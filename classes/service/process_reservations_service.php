@@ -40,7 +40,7 @@ class process_reservations_service {
     }
 
     /**
-     * Retrieves all unprocessed reservations from the database.
+     * Retrieves all unprocessed reservation API calls from the database.
      *
      * @return array An array of unprocessed reservation records.
      */
@@ -57,56 +57,27 @@ class process_reservations_service {
 
     public function process_reservations(\progress_trace $trace, $unprocessedReservations) {
         global $DB;
+
+        $eventIdNumbers = $this->buildEventIdNumbers($unprocessedReservations);
+        $oldSessionRows = $this->getOldSessionRowsByEventIdNumbers($eventIdNumbers);
+        $attendanceSessionIds = $this->buildAttendanceSessionIds($oldSessionRows);
+        $attendanceSessions = $this->getAttendanceSessions($attendanceSessionIds);
+
         foreach ($unprocessedReservations as $unprocessedReservation) {
             $payload = json_decode($unprocessedReservation->payloadjson, true);
 
-            $newitems = [];
-            foreach ($payload['courses'] as $course) {
-                foreach ($course['groups'] as $group) {
-                    $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
-                    $newitems[$key] = [
-                        'eventidnumber' => $unprocessedReservation->eventidnumber,
-                        'start' => $unprocessedReservation->start,
-                        'duration' => $unprocessedReservation->duration,
-                        'roomid' => $unprocessedReservation->roomid,
-                        'courseidnumber' => $course['courseIdNumber'],
-                        'groupname' => $group['name'],
-                        'semestername' => $group['semesterName'],
-                    ];
-                }
-            }
+            $newReservations = $this->buildNewReservations($unprocessedReservation, $payload);
 
-            $oldsessionrows = $DB->get_records('local_obu_att_ws_sessions', [
-                'eventidnumber' => $unprocessedReservation->eventidnumber
-            ]);
+            $oldSessionRowsForUnprocessedReservation = $oldSessionRows[$unprocessedReservation->eventidnumber] ?? [];
 
-            $olditems = [];
-            foreach ($oldsessionrows as $row) {
-                $attendancesession = $DB->get_record('attendance_sessions', [
-                    'id' => $row->session_id
-                ], '*', IGNORE_MISSING);
+            $oldReservations = $this->buildOldReservations($attendanceSessions, $oldSessionRowsForUnprocessedReservation);
 
-                $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname;
-
-                $olditems[$key] = [
-                    'id' => $row->id,
-                    'eventidnumber' => $row->eventidnumber,
-                    'start' => $attendancesession ? $attendancesession->sessdate : null,
-                    'duration' => $attendancesession ? $attendancesession->duration : null,
-                    'roomid' => $attendancesession ? $attendancesession->roomid : null,
-                    'courseidnumber' => $row->courseidnumber,
-                    'groupname' => $row->groupname,
-                    'semestername' => $row->semestername,
-                    'session_id' => $row->session_id,
-                ];
-            }
-
-            $deletekeys = array_diff(array_keys($olditems), array_keys($newitems));
-            $createkeys = array_diff(array_keys($newitems), array_keys($olditems));
-            $commonkeys = array_intersect(array_keys($olditems), array_keys($newitems));
+            $deletekeys = array_diff(array_keys($oldReservations), array_keys($newReservations));
+            $createkeys = array_diff(array_keys($newReservations), array_keys($oldReservations));
+            $commonkeys = array_intersect(array_keys($oldReservations), array_keys($newReservations));
 
             foreach ($deletekeys as $key) {
-                $old = $olditems[$key];
+                $old = $oldReservations[$key];
 
                 $trace->output("Deleting session for key {$key} using Moodle session ID {$old['session_id']}");
 
@@ -130,7 +101,7 @@ class process_reservations_service {
 
             //Create session in Moodle
             foreach ($createkeys as $key) {
-                $new = $newitems[$key];
+                $new = $newReservations[$key];
 
                 $trace->output("Creating Moodle session for {$key}");
 
@@ -165,8 +136,8 @@ class process_reservations_service {
             }
 
             foreach ($commonkeys as $key) {
-                $old = $olditems[$key];
-                $new = $newitems[$key];
+                $old = $oldReservations[$key];
+                $new = $newReservations[$key];
 
                 if (
                     $old['start'] == $new['start'] &&
@@ -219,6 +190,117 @@ class process_reservations_service {
 
             $DB->update_record('local_obu_att_ws_reservation', $updatereservation);
         }
+    }
+
+    private function buildEventIdNumbers($unprocessedReservations) {
+        $eventIdNumbers = [];
+
+        foreach ($unprocessedReservations as $unprocessedReservation) {
+            $eventIdNumbers[] = $unprocessedReservation->eventidnumber;
+        }
+
+        return array_unique($eventIdNumbers);
+    }
+
+    private function buildAttendanceSessionIds(array $oldSessionRows) : array {
+        $sessionIds = [];
+
+        foreach ($oldSessionRows as $rowsForEvent) {
+            foreach ($rowsForEvent as $row) {
+                if (!empty($row->session_id)) {
+                    $sessionIds[] = (int)$row->session_id;
+                }
+            }
+        }
+
+        return array_values(array_unique($sessionIds));
+    }
+
+    private function getAttendanceSessions(array $sessionIds) : array{
+        global $DB;
+
+        if (empty($sessionIds)) {
+            return [];
+        }
+
+        list($insql, $params) = $DB->get_in_or_equal($sessionIds, SQL_PARAMS_NAMED);
+
+        return $DB->get_records_select(
+            'attendance_sessions',
+            "id $insql",
+            $params
+        );
+    }
+
+    private function getOldSessionRowsByEventIdNumbers(array $eventIdNumbers) {
+        global $DB;
+
+        $oldSessionRows = [];
+
+        if (empty($eventIdNumbers)) {
+            return $oldSessionRows;
+        }
+
+        list($insql, $params) = $DB->get_in_or_equal($eventIdNumbers, SQL_PARAMS_NAMED);
+
+        $rows = $DB->get_records_select(
+            'local_obu_att_ws_sessions',
+            "eventidnumber $insql",
+            $params
+        );
+
+        foreach ($rows as $row) {
+            $oldSessionRows[$row->eventidnumber][] = $row;
+        }
+
+        return $oldSessionRows;
+    }
+
+    private function buildNewReservations($unprocessedReservation, array $payload) : array {
+        $newReservations = [];
+
+        foreach ($payload['courses'] as $course) {
+
+            foreach ($course['groups'] as $group) {
+
+                $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
+                $newReservations[$key] = [
+                    'eventidnumber' => $unprocessedReservation->eventidnumber,
+                    'start' => $unprocessedReservation->start,
+                    'duration' => $unprocessedReservation->duration,
+                    'roomid' => $unprocessedReservation->roomid,
+                    'courseidnumber' => $course['courseIdNumber'],
+                    'groupname' => $group['name'],
+                    'semestername' => $group['semesterName'],
+                ];
+            }
+        }
+
+        return $newReservations;
+    }
+
+    private function buildOldReservations(array $attendanceSessions, array $oldSessionRows) : array {
+        $oldReservations = [];
+
+        foreach ($oldSessionRows as $row) {
+            $attendancesession = $attendanceSessions[$row->session_id] ?? null;
+
+            $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname;
+
+            $oldReservations[$key] = [
+                'id' => $row->id,
+                'eventidnumber' => $row->eventidnumber,
+                'start' => $attendancesession ? $attendancesession->sessdate : null,
+                'duration' => $attendancesession ? $attendancesession->duration : null,
+                'roomid' => $attendancesession ? $attendancesession->roomid : null,
+                'courseidnumber' => $row->courseidnumber,
+                'groupname' => $row->groupname,
+                'semestername' => $row->semestername,
+                'session_id' => $row->session_id,
+            ];
+        }
+
+        return $oldReservations;
     }
 
 }
