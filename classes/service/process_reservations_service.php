@@ -254,7 +254,7 @@ class process_reservations_service {
         return [
             'delete' => array_diff($oldKeys, $newKeys),
             'create' => array_diff($newKeys, $oldKeys),
-            'common' => array_intersect($oldKeys, $newKeys),
+            'update' => array_intersect($oldKeys, $newKeys),
         ];
     }
 
