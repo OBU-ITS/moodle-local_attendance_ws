@@ -27,7 +27,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_attendance_ws';
-$plugin->version = 2026042100;
+$plugin->version = 2026071300;
 $plugin->requires = 2012120301;
 $plugin->maturity = MATURITY_STABLE;
 $plugin->release = 'v1.7.1.0';
