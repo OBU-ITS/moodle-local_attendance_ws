@@ -38,7 +38,7 @@ class process_reservations extends \core\task\scheduled_task{
             mtrace('Could not acquire process reservations lock. Another run may already be active.');
             return;
         }
-
+        
         try {
             $trace = new \text_progress_trace();
 
@@ -47,6 +47,5 @@ class process_reservations extends \core\task\scheduled_task{
         } finally {
             $lock->release();
         }
-        
     }
 }
