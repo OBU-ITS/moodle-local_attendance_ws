@@ -31,9 +31,22 @@ class process_reservations extends \core\task\scheduled_task{
     }
 
     public function execute() {
-        $trace = new \text_progress_trace();
+        $lockfactory = \core\lock\lock_config::get_lock_factory('local_attendance_ws');
+        $lock = $lockfactory->get_lock('process_reservations', 30);
 
-        $handler = new \local_attendance_ws\handlers\process_reservations_handler($trace);
-        $handler->handle_process_reservations();
+        if (!$lock) {
+            mtrace('Could not acquire process reservations lock. Another run may already be active.');
+            return;
+        }
+
+        try {
+            $trace = new \text_progress_trace();
+
+            $handler = new \local_attendance_ws\handlers\process_reservations_handler($trace);
+            $handler->handle_process_reservations();
+        } finally {
+            $lock->release();
+        }
+        
     }
 }

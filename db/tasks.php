@@ -28,10 +28,10 @@ $tasks = [
     [
         'classname' => 'local_attendance_ws\task\process_reservations',
         'blocking' => 0,
-        'minute' => '45',
-        'hour' => '17',
+        'minute' => '*/5',
+        'hour' => '*',
         'day' => '*',
-        'month' => '1,7',
-        'dayofweek' => '0',
+        'month' => '*',
+        'dayofweek' => '*',
     ],
 ];
