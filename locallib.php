@@ -28,7 +28,10 @@ defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/local/obu_metalinking/lib.php');
 require_once($CFG->dirroot . '/local/obu_group_manager/lib.php');
+require_once($CFG->dirroot . '/mod/attendance/locallib.php');
+require_once($CFG->dirroot . '/mod/attendance/lib.php');
 require_once($CFG->dirroot . "/course/modlib.php");
+require_once($CFG->dirroot . '/group/lib.php');
 
 function local_attendance_ws_password_hash($slotid, $roomid, $eventdate, $length, $salt = ""): string
 {
@@ -164,4 +167,200 @@ function local_attendance_ws_change_session_course($trace, $fromcourse, $fromact
 
         $trace->output("Session ($result->id) moved to $tocourse->shortname with group ($group->idnumber).");
     }
+}
+
+function local_attendance_ws_get_session_id($slotid, $courseidnumber) {
+    global $DB;
+
+    $conditions = [
+        'slot_id' => $slotid,
+        'course_id_number' => $courseidnumber
+    ];
+
+    $record = $DB->get_record('local_obu_att_session_lookup', $conditions, 'session_id', IGNORE_MISSING);
+
+    if ($record && !empty($record->session_id)) {
+        return $record->session_id;
+    }
+
+    return 0;
+}
+
+function local_attendance_ws_delete_session($sessionId){
+    global $DB;
+
+    if (!($session = $DB->get_record('attendance_sessions', array('id' => $sessionId)))) {
+        return array('result' => 0);
+    }
+
+    if (!($cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false))) {
+        return array('result' => -2);
+    }
+
+    // Capability checking
+    $context = context_module::instance($cm->id);
+    require_capability('mod/attendance:manageattendances', $context);
+
+    if ($session->caleventid) {
+        attendance_delete_calendar_events(array($sessionId));
+    }
+
+    $DB->delete_records('attendance_log', array('sessionid' => $sessionId));
+    $DB->delete_records('attendance_sessions', array('id' => $sessionId));
+    $event = \mod_attendance\event\session_deleted::create(array(
+        'objectid' => $session->attendanceid,
+        'context' => $context,
+        'other' => array('info' => $sessionId)
+    ));
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->trigger();
+
+    return array('result' => $sessionId);
+}
+
+function local_attendance_ws_create_session(
+    string $courseidnumber,
+    string $eventidnumber,
+    string $roomid,
+    string $groupname,
+    int $start,
+    int $duration,
+    string $semestername
+): array {
+    global $DB;
+
+    if (!$course = $DB->get_record('course', ['idnumber' => $courseidnumber])) {
+        return ['result' => -2];
+    }
+
+    $teachingcourse = local_obu_metalinking_get_teaching_course($course);
+    if (!$attendance = local_attendance_ws_find_attendance_activity($teachingcourse)) {
+        return ['result' => -3];
+    }
+
+    if (!$cm = get_coursemodule_from_instance('attendance', $attendance->id, 0, false)) {
+        return ['result' => -4];
+    }
+
+    $pluginconfig = get_config('attendance');
+
+    $session = new stdClass();
+    $session->attendanceid = $attendance->id;
+    $session->timetableeventid = $eventidnumber;
+    $session->roomid = $roomid;
+    $session->sessdate = $start;
+    $session->duration = $duration;
+    $session->lasttaken = null;
+    $session->lasttakenby = 0;
+    $session->timemodified = time();
+
+    $usergroup = ($groupname === '0' || $groupname === '')
+        ? local_obu_group_manager_create_system_group($course, null, null, null, null, $teachingcourse)
+        : local_obu_group_manager_create_system_group($course, null, null, $semestername, $groupname, $teachingcourse);
+
+    $session->groupid = $usergroup->id;
+    $session->description = 'Room(s): ' . $roomid;
+    $session->descriptionformat = 1;
+    $session->statusset = 0;
+    $session->calendarevent = 0;
+
+    $salt = get_config('local_attendance_ws', 'salt');
+    $session->studentpassword = local_attendance_ws_password_hash($eventidnumber, $roomid, $start, 6, $salt);
+    $session->sessioninstancecode = local_attendance_ws_session_instance_code($eventidnumber, $roomid, $start);
+
+    if (isset($pluginconfig->calendarevent_default)) {
+        $session->caleventid = $pluginconfig->calendarevent_default;
+    }
+    if (isset($pluginconfig->studentscanmark_default)) {
+        $session->studentscanmark = $pluginconfig->studentscanmark_default;
+    }
+    if (isset($pluginconfig->randompassword_default)) {
+        $session->randompassword = $pluginconfig->randompassword_default;
+    }
+    if (isset($pluginconfig->includeqrcode_default)) {
+        $session->includeqrcode = $pluginconfig->includeqrcode_default;
+    }
+    if (isset($pluginconfig->autoassignstatus)) {
+        $session->autoassignstatus = $pluginconfig->autoassignstatus;
+    }
+    if (isset($pluginconfig->allowupdatestatus_default)) {
+        $session->allowupdatestatus = $pluginconfig->allowupdatestatus_default;
+    }
+    if (isset($pluginconfig->rotateqrcode_default)) {
+        $session->rotateqrcode = $pluginconfig->rotateqrcode_default;
+    }
+    if (isset($pluginconfig->automark_default)) {
+        $session->automark = $pluginconfig->automark_default;
+    }
+    if (isset($pluginconfig->studentsearlyopentime)) {
+        $session->studentsearlyopentime = $pluginconfig->studentsearlyopentime;
+    }
+
+    if (!empty($session->rotateqrcode)) {
+        $session->studentpassword = local_attendance_ws_password_hash($eventidnumber, $roomid, $start, 6, $salt);
+        $session->rotateqrcodesecret = local_attendance_ws_password_hash($eventidnumber, $roomid, $start, 6, $salt);
+    }
+
+    $session->id = $DB->insert_record('attendance_sessions', $session);
+
+    attendance_create_calendar_event($session);
+
+    $context = context_module::instance($cm->id);
+    require_capability('mod/attendance:manageattendances', $context);
+
+    $event = \mod_attendance\event\session_added::create([
+        'objectid' => $attendance->id,
+        'context' => $context,
+        'other' => ['info' => construct_session_full_date_time($session->sessdate, $session->duration)]
+    ]);
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->add_record_snapshot('attendance_sessions', $session);
+    $event->trigger();
+
+    mod_attendance_notifyqueue::notify_success(get_string('sessiongenerated', 'attendance'));
+
+    return ['result' => $session->id];
+}
+
+function local_attendance_ws_update_session(
+    int $sessionid,
+    int $start,
+    int $duration,
+    string $roomid
+): array {
+    global $DB;
+
+    if (!$session = $DB->get_record('attendance_sessions', ['id' => $sessionid])) {
+        return ['result' => 0];
+    }
+
+    if (!$cm = get_coursemodule_from_instance('attendance', $session->attendanceid, 0, false)) {
+        return ['result' => -2];
+    }
+
+    $context = context_module::instance($cm->id);
+    require_capability('mod/attendance:manageattendances', $context);
+
+    $session->sessdate = $start;
+    $session->duration = $duration;
+    $session->roomid = $roomid;
+    $session->description = 'Room(s): ' . $roomid;
+    $session->timemodified = time();
+
+    $DB->update_record('attendance_sessions', $session);
+
+    $event = \mod_attendance\event\session_updated::create([
+        'objectid' => $session->attendanceid,
+        'context' => $context,
+        'other' => [
+            'info' => construct_session_full_date_time($session->sessdate, $session->duration),
+            'sessionid' => $session->id,
+            'action' => mod_attendance_sessions_page_params::ACTION_UPDATE,
+        ],
+    ]);
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->add_record_snapshot('attendance_sessions', $session);
+    $event->trigger();
+
+    return ['result' => $sessionid];
 }

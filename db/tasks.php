@@ -16,26 +16,22 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version info
- *
- * @package    local_attendance_ws
- * @author     Peter Welham
- * @copyright  2017, Oxford Brookes University {@link http://www.brookes.ac.uk/}
+ * @package    local_obu_attendance_ws
+ * @author     Emir Kamel
+ * @copyright  2026, Oxford Brookes University {@link http://www.brookes.ac.uk/}
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_attendance_ws';
-$plugin->version = 2026073100;
-$plugin->requires = 2012120301;
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.7.2.0';
-$plugin->dependencies = array(
-    'mod_attendance' => 2024070301, // OBU Customisation fork
-    'local_obu_metalinking' => 2024110101,
-    'local_obu_group_manager' => 2024100301,
-    'local_obu_attendance_events' => 2024100901,
-    'local_obu_metalinking_events' => 2024100901
-);
-
+$tasks = [
+    [
+        'classname' => 'local_attendance_ws\task\process_reservations',
+        'blocking' => 0,
+        'minute' => '*/5',
+        'hour' => '*',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
+];
