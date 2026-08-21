@@ -173,30 +173,79 @@ Ensure:
 
 After installing or updating the plugin:
 
-1. Ensure the Moodle Attendance module is installed and configured.
-2. Deploy the plugin code to `local/attendance_ws`.
-3. Run the Moodle upgrade process.
-4. Enable web services and the required protocol, e.g. REST.
-5. Confirm the `Attendance web service` external service is enabled.
-6. Add the required plugin functions to the external service if they are not already present.
-7. Create or confirm a dedicated web service user and token for the integration.
-8. Create or update a dedicated system-level API role for the token user.
-9. Assign the required attendance web service capability/capabilities to that role.
-10. Assign the role to the web service token user at system context.
-11. Restrict the external service to the dedicated API user/token.
-12. Confirm Moodle cron is running.
-13. Confirm the scheduled task is enabled and its schedule is appropriate for the TimeEdit update frequency.
-14. Enable the plugin in its settings, if required.
+1. **Install required dependencies**
+   - Ensure the Moodle Attendance module is installed and configured.
+   - Ensure the required OBU local plugin dependencies are installed:
 
-Recommended API role setup:
+   ```text
+   mod_attendance
+   local_obu_metalinking
+   local_obu_group_manager
+   local_obu_attendance_events
+   local_obu_metalinking_events
+   ```
 
-- Role archetype: `None`
-- Context type where the role may be assigned: `System`
-- Allow role assignments: none
-- Allow role overrides: none
-- Allow role switches: none
-- Grant only the required attendance web service capability/capabilities
+2. **Run Moodle upgrade**
+   - Install the plugin through the Moodle UI, or run:
 
-The token user should only be given the permissions needed for the approved web service functions.
+   ```bash
+   php admin/cli/upgrade.php
+   ```
+
+3. **Enable required Moodle services**
+   - Ensure web services are enabled.
+   - Enable the required protocol, e.g. REST.
+   - Ensure Moodle cron is running.
+
+4. **Configure the external service**
+   - Add the required functions to the external service.
+   - During transition, legacy and newer functions may be enabled as required:
+
+   ```text
+   local_attendance_ws_add_session
+   local_attendance_ws_add_sessions
+   local_attendance_ws_update_session
+   local_attendance_ws_upsert_sessions
+   local_attendance_ws_delete_session
+   local_attendance_ws_delete_sessions
+   local_attendance_ws_get_settings
+   ```
+
+5. **Create and assign the API role**
+   - Create a dedicated system role for the web service user.
+   - Assign the required capabilities.
+   - If both the Attendance module capability and the custom plugin capability are declared in `db/services.php`, the API user must have both:
+
+   ```text
+   mod/attendance:manageattendances
+   local/attendance_ws:managesessions
+   ```
+
+   - Assign the role at system level to the Moodle user that owns the web service token.
+
+6. **Create or verify the web service token**
+   - The token should belong to the dedicated integration user.
+   - If the external service uses authorised users, ensure that user is authorised for the service.
+
+7. **Check plugin/task settings**
+   - Enable the plugin if an enable setting is present.
+   - Check the scheduled task is enabled under:
+
+   ```text
+   Site administration → Server → Tasks → Scheduled tasks
+   ```
+
+8. **Confirm scheduled task configuration**
+   - Confirm the attendance processing task is enabled.
+   - Check the schedule is appropriate for the TimeEdit feed.
+   - If TimeEdit sends updates every 10 minutes, a typical schedule is every 5 minutes:
+
+   ```text
+   */5 * * * *
+   ```
+
+9. **Confirm cron processing**
+   - Ensure Moodle cron is running frequently enough to process scheduled tasks.
+   - Check task logs after deployment to confirm queued attendance records are being processed successfully.
 
 ---
