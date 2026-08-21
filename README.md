@@ -168,3 +168,35 @@ Ensure:
 - Proper permissions are configured for API access
 
 ---
+
+## Manual deployment / configuration
+
+After installing or updating the plugin:
+
+1. Ensure the Moodle Attendance module is installed and configured.
+2. Deploy the plugin code to `local/attendance_ws`.
+3. Run the Moodle upgrade process.
+4. Enable web services and the required protocol, e.g. REST.
+5. Confirm the `Attendance web service` external service is enabled.
+6. Add the required plugin functions to the external service if they are not already present.
+7. Create or confirm a dedicated web service user and token for the integration.
+8. Create or update a dedicated system-level API role for the token user.
+9. Assign the required attendance web service capability/capabilities to that role.
+10. Assign the role to the web service token user at system context.
+11. Restrict the external service to the dedicated API user/token.
+12. Confirm Moodle cron is running.
+13. Confirm the scheduled task is enabled and its schedule is appropriate for the TimeEdit update frequency.
+14. Enable the plugin in its settings, if required.
+
+Recommended API role setup:
+
+- Role archetype: `None`
+- Context type where the role may be assigned: `System`
+- Allow role assignments: none
+- Allow role overrides: none
+- Allow role switches: none
+- Grant only the required attendance web service capability/capabilities
+
+The token user should only be given the permissions needed for the approved web service functions.
+
+---

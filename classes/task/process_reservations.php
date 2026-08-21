@@ -31,6 +31,11 @@ class process_reservations extends \core\task\scheduled_task{
     }
 
     public function execute() {
+        if (!get_config('local_attendance_ws', 'enable')) {
+            mtrace('Attendance web service sync is disabled.');
+            return;
+        }
+
         $lockfactory = \core\lock\lock_config::get_lock_factory('local_attendance_ws');
         $lock = $lockfactory->get_lock('process_reservations', 30);
 
