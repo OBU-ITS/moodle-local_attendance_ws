@@ -53,7 +53,7 @@ $functions = array(
         'classpath'   => 'local/attendance_ws/externallib.php',
         'description' => 'Inserts new or updates existing attendance sessions with the given details.',
         'type'        => 'write',
-        'capabilities'=> 'mod/attendance:manageattendances'
+        'capabilities'=> 'mod/attendance:manageattendances,local/attendance_ws:managesessions'
     ),
 	'local_attendance_ws_delete_session' => array(
 		'classname'   => 'local_attendance_ws_external',
@@ -69,7 +69,7 @@ $functions = array(
         'classpath'   => 'local/attendance_ws/externallib.php',
         'description' => 'Deletes attendance sessions with the given ID. Returns an array.',
         'type'        => 'write',
-        'capabilities'=> 'mod/attendance:manageattendances'
+        'capabilities'=> 'mod/attendance:manageattendances,local/attendance_ws:managesessions'
     ),
     'local_attendance_ws_get_settings' => array(
         'classname'   => 'local_attendance_ws_external',

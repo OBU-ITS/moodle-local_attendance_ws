@@ -34,6 +34,13 @@ require_once($CFG->dirroot . "/local/obu_metalinking/lib.php");
 require_once($CFG->dirroot . "/local/obu_group_manager/lib.php");
 
 class local_attendance_ws_external extends external_api {
+
+    private static function require_manage_sesions_access(): void {
+        $context = \context_system::instance();
+        self::validate_context($context);
+        require_capability('local/attendance_ws:managesessions', $context);
+    }
+
     // DEPRECATED - remove after implementation of Upsert
     public static function add_session_parameters() {
 		return new external_function_parameters(
@@ -205,6 +212,8 @@ class local_attendance_ws_external extends external_api {
             ['reservations' => $reservations]
         );
 
+        self::require_manage_sesions_access();
+
         $currentTime = time();
 
         foreach ($params['reservations'] as $reservation) {
@@ -292,6 +301,8 @@ class local_attendance_ws_external extends external_api {
                 'eventIdNumbers' => $eventidnumbers
             )
         );
+
+        self::require_manage_sesions_access();
 
         $currenttime = time();
 

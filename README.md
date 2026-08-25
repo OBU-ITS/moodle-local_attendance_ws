@@ -168,3 +168,84 @@ Ensure:
 - Proper permissions are configured for API access
 
 ---
+
+## Manual deployment / configuration
+
+After installing or updating the plugin:
+
+1. **Install required dependencies**
+   - Ensure the Moodle Attendance module is installed and configured.
+   - Ensure the required OBU local plugin dependencies are installed:
+
+   ```text
+   mod_attendance
+   local_obu_metalinking
+   local_obu_group_manager
+   local_obu_attendance_events
+   local_obu_metalinking_events
+   ```
+
+2. **Run Moodle upgrade**
+   - Install the plugin through the Moodle UI, or run:
+
+   ```bash
+   php admin/cli/upgrade.php
+   ```
+
+3. **Enable required Moodle services**
+   - Ensure web services are enabled.
+   - Enable the required protocol, e.g. REST.
+   - Ensure Moodle cron is running.
+
+4. **Configure the external service**
+   - Add the required functions to the external service.
+   - During transition, legacy and newer functions may be enabled as required:
+
+   ```text
+   local_attendance_ws_add_session
+   local_attendance_ws_add_sessions
+   local_attendance_ws_update_session
+   local_attendance_ws_upsert_sessions
+   local_attendance_ws_delete_session
+   local_attendance_ws_delete_sessions
+   local_attendance_ws_get_settings
+   ```
+
+5. **Create and assign the API role**
+   - Create a dedicated system role for the web service user.
+   - Assign the required capabilities.
+   - If both the Attendance module capability and the custom plugin capability are declared in `db/services.php`, the API user must have both:
+
+   ```text
+   mod/attendance:manageattendances
+   local/attendance_ws:managesessions
+   ```
+
+   - Assign the role at system level to the Moodle user that owns the web service token.
+
+6. **Create or verify the web service token**
+   - The token should belong to the dedicated integration user.
+   - If the external service uses authorised users, ensure that user is authorised for the service.
+
+7. **Check plugin/task settings**
+   - Enable the plugin if an enable setting is present.
+   - Check the scheduled task is enabled under:
+
+   ```text
+   Site administration → Server → Tasks → Scheduled tasks
+   ```
+
+8. **Confirm scheduled task configuration**
+   - Confirm the attendance processing task is enabled.
+   - Check the schedule is appropriate for the TimeEdit feed.
+   - If TimeEdit sends updates every 10 minutes, a typical schedule is every 5 minutes:
+
+   ```text
+   */5 * * * *
+   ```
+
+9. **Confirm cron processing**
+   - Ensure Moodle cron is running frequently enough to process scheduled tasks.
+   - Check task logs after deployment to confirm queued attendance records are being processed successfully.
+
+---
