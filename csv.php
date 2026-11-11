@@ -15,8 +15,7 @@ require_once(__DIR__ . '/../../config.php');
 require_login();
 $context = context_system::instance();
 
-// TODO : Change capability
-require_capability('local/obu_timetable_usergroups:manageusergroups', $context);
+require_capability('local/attendance_ws:managesessions', $context);
 
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/attendance_ws/csv.php'));
