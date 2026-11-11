@@ -133,5 +133,34 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
         upgrade_plugin_savepoint(true, 2026030900, 'local', 'attendance_ws');
     }
 
+    if ($oldversion < 2026111100) {
+
+        $table = new xmldb_table('local_obu_att_ws_sessions');
+        $oldkey = new xmldb_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname']);
+        if ($dbman->key_exists($table, $oldkey)) {
+            $dbman->drop_key($table, $oldkey);
+        }
+
+        $newkey = new xmldb_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname', 'semestername']);
+        $dbman->add_key($table, $newkey);
+
+
+        $table = new xmldb_table('local_obu_att_ws_manualupload');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('eventidnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('courseidnumber', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('groupname', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('semestername', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname', 'semestername']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        // Save point reached.
+        upgrade_plugin_savepoint(true, 2026111100, 'local', 'attendance_ws');
+    }
+
     return $result;
 }
