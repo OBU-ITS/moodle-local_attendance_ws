@@ -3,7 +3,7 @@
 // Moodle is distributed under the GNU GPL v3 or later.
 
 /**
- * Upload module group assignments and display their JSON representation.
+ * Upload reservation data for attendance processing.
  *
  * @package local_attendance_ws
  * @copyright 2026 Oxford Brookes University
@@ -24,17 +24,20 @@ $PAGE->set_title(get_string('csvtitle', 'local_attendance_ws'));
 $PAGE->set_heading(get_string('plugintitle', 'local_attendance_ws'));
 $PAGE->navbar->add(get_string('csvtitle', 'local_attendance_ws'));
 
-$form = new \attendance_ws\form\csv_upload_form();
+$form = new \local_attendance_ws\form\csv_upload_form();
 $results = null;
 $error = null;
 $trace = new \html_progress_trace();
+echo $OUTPUT->header();
+echo $OUTPUT->heading(get_string('csvtitle', 'local_attendance_ws'));
+
 if ($form->get_data()) {
     $filepath = $form->save_temp_file('csvfile');
     if ($filepath === false) {
         $error = get_string('csvcannotread', 'local_attendance_ws');
     } else {
         try {
-            $results = \local_attendance_ws\csv_processor::process_csv_file($filepath);
+            $results = \local_attendance_ws\csv_processor::process_csv_file($filepath, $trace);
         } catch (moodle_exception $e) {
             $error = $e->getMessage();
         } finally {
@@ -43,10 +46,9 @@ if ($form->get_data()) {
     }
 }
 
-echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('csvtitle', 'local_attendance_ws'));
 echo html_writer::tag('p', get_string('csvinstructions', 'local_attendance_ws'));
-echo html_writer::tag('pre', s("relation,groupName,instanceName,usernames\nENGR4009_S1_1_202609,Set1,S1,12345678|23456789"));
+echo html_writer::tag('pre', s("Id,Room,Date,Time,Length,Module,ModuleGroup,ModuleGroupName\n"
+    . "76262,NHHB.2.13,10/12/2026,09:00-11:00,02:00:00,ENGR7006_S1_1_202609,ENGR7006_S1_1_202609_Set2_GS2,SetB2"));
 $form->display();
 
 if ($error !== null) {

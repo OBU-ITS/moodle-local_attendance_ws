@@ -48,6 +48,12 @@ if ($hassiteconfig) {
     $settingscat->add('attendancewstasks', $settings);
 
     $settingscat->add('attendancewstasks', new admin_externalpage(
+        'attendancewsrunchanges',
+        get_string('runchangestitle', 'local_attendance_ws'),
+        new moodle_url('/local/attendance_ws/run_changes.php'),
+        'local/attendance_ws:managesessions'));
+
+    $settingscat->add('attendancewstasks', new admin_externalpage(
         'attendancewstaskssync',
         'Sync metalinked sessions',
         "$CFG->wwwroot/local/attendance_ws/tools/syncmetalinkedsessions.php"));
