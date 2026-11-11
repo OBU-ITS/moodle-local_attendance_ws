@@ -15,6 +15,32 @@ defined('MOODLE_INTERNAL') || die();
  */
 class csv_processor
 {
+    public static function process_csv_file(string $filepath)
+    {
+        global $DB;
+
+        $batchSize = 1000;
+        $batch = [];
+
+        foreach (\local_attendance_ws\csv_processor::process_sorted_csv_stream($filepath) as $event) {
+            $batch[] = $event;
+
+            if (count($batch) >= $batchSize) {
+                $transaction = $DB->start_delegated_transaction();
+                $DB->insert_records('local_obu_att_ws_manualupload', $batch);
+                $transaction->allow_commit();
+
+                $batch = []; // Clear chunk memory
+            }
+        }
+
+        if (!empty($batch)) {
+            $transaction = $DB->start_delegated_transaction();
+            $DB->insert_records('local_obu_att_ws_manualupload', $batch);
+            $transaction->allow_commit();
+        }
+    }
+
     /**
      * Yields JSON objects line-by-line for a CSV sorted by 'Id'.
      * Uses constant O(1) memory regardless of file size.
@@ -35,9 +61,6 @@ class csv_processor
         // Skip header row
         fgetcsv($file);
 
-        $currentId = null;
-        $currentEvent = null;
-
         while (($row = fgetcsv($file)) !== false) {
             // Skip empty rows
             if (empty($row[0])) {
@@ -45,71 +68,37 @@ class csv_processor
             }
 
             list($id, $room, $date, $time, $length, $module, $moduleGroup, $moduleGroupName) = $row;
-            $id = (string)$id;
 
-            // When ID changes, yield the completed event and free memory
-            if ($currentId !== null && $id !== $currentId) {
-                yield $currentId => self::finalize_event_json($currentEvent);
-                $currentEvent = null;
-            }
+            // Calculate start Unix timestamp
+            $timeParts = explode('-', $time);
+            $startTimeStr = trim($timeParts[0]);
+            $dateObj = \DateTime::createFromFormat('j/n/y H:i', "{$date} {$startTimeStr}", new \DateTimeZone(date_default_timezone_get()));
+            $startTimestamp = $dateObj ? (string)$dateObj->getTimestamp() : '0';
 
-            // Initialize new event block
-            if ($currentEvent === null) {
-                $currentId = $id;
+            // Calculate duration in seconds (e.g. 02:00 -> 7200)
+            list($hours, $minutes) = explode(':', $length);
+            $durationSeconds = (string)(((int)$hours * 3600) + ((int)$minutes * 60));
 
-                // Calculate timestamp
-                $timeParts = explode('-', $time);
-                $startTimeStr = trim($timeParts[0]);
-                $dateObj = \DateTime::createFromFormat('j/n/y H:i', "{$date} {$startTimeStr}", new \DateTimeZone(date_default_timezone_get()));
-                $startTimestamp = $dateObj ? (string)$dateObj->getTimestamp() : '0';
-
-                // Calculate duration in seconds
-                list($hours, $minutes) = explode(':', $length);
-                $durationSeconds = (string)(((int)$hours * 3600) + ((int)$minutes * 60));
-
-                $currentEvent = [
-                    'eventIdNumber' => $id,
-                    'roomId'        => (string)$room,
-                    'start'         => $startTimestamp,
-                    'duration'      => $durationSeconds,
-                    'courses'       => []
-                ];
-            }
-
-            // Course ID formatting & Semester extraction
+            // Standardize module to course ID number (e.g. ENGR6010_S1_2_202609 -> 2026.ENGR6010_S1_2)
             $courseIdNumber = self::format_course_id($module);
-            $semesterName   = self::extract_semester($module);
 
-            if (!isset($currentEvent['courses'][$courseIdNumber])) {
-                $currentEvent['courses'][$courseIdNumber] = [
-                    'courseIdNumber' => $courseIdNumber,
-                    'groups'         => []
-                ];
-            }
+            // Extract semester name (e.g. S1)
+            $groupSemesterName = self::extract_semester($moduleGroup);
 
-            $currentEvent['courses'][$courseIdNumber]['groups'][] = [
-                'name'         => (string)$moduleGroupName,
-                'semesterName' => $semesterName
+            yield [
+                'eventidnumber'     => (string)$id,
+                'courseidnumber'    => $courseIdNumber,
+                'roomid'            => (string)$room,
+                'start'             => $startTimestamp,
+                'duration'          => $durationSeconds,
+                'groupname'         => (string)$moduleGroupName,
+                'semestername' => $groupSemesterName,
             ];
-        }
-
-        // Yield the very last event in the file
-        if ($currentEvent !== null) {
-            yield $currentId => self::finalize_event_json($currentEvent);
         }
 
         fclose($file);
     }
 
-    /**
-     * Converts course associative array into indexed structure and encodes to JSON.
-     */
-    private static function finalize_event_json(array $eventData): string {
-        $eventData['courses'] = array_values($eventData['courses']);
-        return json_encode($eventData, JSON_UNESCAPED_SLASHES);
-    }
-
-    // TODO : Review following Regexs
     private static function format_course_id(string $module): string {
         if (preg_match('/^(.+)_(\d{4})\d{2}$/', trim($module), $matches)) {
             return "{$matches[2]}.{$matches[1]}";
@@ -118,9 +107,12 @@ class csv_processor
     }
 
     private static function extract_semester(string $module): string {
-        if (preg_match('/_(S\d+)/i', $module, $matches)) {
-            return strtoupper($matches[1]);
+        if (preg_match('/^([A-Z0-9_]+)_(\d{4})\d{2}_Whole Cohort$/', $module, $matches)) {
+            return "WC";
         }
-        return 'S1';
+        if (preg_match('/^([A-Z0-9_]+)_(\d{4})\d{2}_[a-zA-Z0-9]+_([A-Z0-9]+)$/', $module, $matches)) {
+            return $matches[3];
+        }
+        return $module;
     }
 }
