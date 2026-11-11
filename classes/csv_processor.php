@@ -15,10 +15,18 @@ defined('MOODLE_INTERNAL') || die();
  */
 class csv_processor
 {
-    public static function process_csv_file(string $filepath)
+    public static function process_csv_file(string $filepath, $trace)
     {
         global $DB;
 
+
+        $transaction = $DB->start_delegated_transaction();
+        $DB->delete_records('local_obu_att_ws_manualupload');
+        $transaction->allow_commit();
+        $trace->output("Previous rows deleted.");
+        $time_start = microtime(true);
+
+        $count = 0;
         $batchSize = 1000;
         $batch = [];
 
@@ -31,6 +39,8 @@ class csv_processor
                 $transaction->allow_commit();
 
                 $batch = []; // Clear chunk memory
+
+                $count += 1000;
             }
         }
 
@@ -38,7 +48,14 @@ class csv_processor
             $transaction = $DB->start_delegated_transaction();
             $DB->insert_records('local_obu_att_ws_manualupload', $batch);
             $transaction->allow_commit();
+
+            $count += count($batch);
         }
+
+        $trace->output("Rows saved {$count}");
+        $time_end = microtime(true);
+        $execution_time = ($time_end - $time_start)/60;
+        $trace->output("Total Execution Time: {$execution_time} Mins");
     }
 
     /**
@@ -46,7 +63,7 @@ class csv_processor
      * Uses constant O(1) memory regardless of file size.
      *
      * @param string $filepath Path to the CSV file.
-     * @return \Generator Yields [eventId => json_string] per completed event.
+     * @return \Generator Yields event array per completed event.
      */
     public static function process_sorted_csv_stream(string $filepath): \Generator {
         if (!file_exists($filepath) || !is_readable($filepath)) {

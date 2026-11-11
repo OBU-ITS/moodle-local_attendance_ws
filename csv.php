@@ -27,6 +27,7 @@ $PAGE->navbar->add(get_string('csvtitle', 'local_attendance_ws'));
 $form = new \attendance_ws\form\csv_upload_form();
 $results = null;
 $error = null;
+$trace = new \html_progress_trace();
 if ($form->get_data()) {
     $filepath = $form->save_temp_file('csvfile');
     if ($filepath === false) {
@@ -56,10 +57,7 @@ if ($results !== null) {
         echo $OUTPUT->notification(get_string('csvnodata', 'local_attendance_ws'), 'warning');
     } else {
         echo $OUTPUT->heading(get_string('csvresults', 'local_attendance_ws'), 3);
-        foreach ($results as $courseidnumber => $json) {
-            echo $OUTPUT->heading(s($courseidnumber), 4);
-            echo html_writer::tag('pre', s($json), ['class' => 'border rounded p-3']);
-        }
+        $trace->finished();
     }
 }
 echo $OUTPUT->footer();
