@@ -40,7 +40,10 @@ if ($hassiteconfig) {
         'local_attendance_ws/enableevents',
         get_string('enableevents', 'local_attendance_ws'),
         get_string('enableeventsdescription', 'local_attendance_ws'), true));
-
+    $settings->add(new admin_setting_heading('local_attendance_ws/csv',
+        get_string('csvtitle', 'local_attendance_ws'),
+        html_writer::link(new moodle_url('/local/attendance_ws/csv.php'),
+            get_string('csvuploadlink', 'local_attendance_ws'))));
 
     $settingscat->add('attendancewstasks', $settings);
 
