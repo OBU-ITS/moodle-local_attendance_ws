@@ -35,6 +35,7 @@ class adhoc_process_manual_upload extends \core\task\adhoc_task
      */
     public function execute() {
         $trace = new \text_progress_trace();
-        \local_attendance_ws\manual_upload_processor::batch_process($trace);
+        \local_attendance_ws\manual_upload_processor::batch_delete_process($trace);
+        \local_attendance_ws\manual_upload_processor::batch_upsert_process($trace);
     }
 }

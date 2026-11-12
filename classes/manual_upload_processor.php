@@ -15,40 +15,45 @@ defined('MOODLE_INTERNAL') || die();
  */
 class manual_upload_processor
 {
-    public static function batch_process($trace) {
-        foreach (manual_upload_processor::get_aggregated_reservations() as $eventid => $event) {
+    public static function batch_delete_process($trace) {
+        global $DB;
 
-            // TODO : What are we doing with it?
-        }
+        $sql = "SELECT s.eventidnumber
+                  FROM {local_obu_att_ws_payload} p
+             LEFT JOIN {local_obu_att_ws_manualupload} m
+                    ON p.eventidnumber = m.eventidnumber
+                 WHERE m.id IS NULL";
+
+        $eventidnumbers = $DB->get_fieldset_sql($sql);
+        $count = count($eventidnumbers);
+
+        $trace->output("Delete started. Deleting {$count}");
+
+        local_attendance_ws_delete_sessions($eventidnumbers);
+
+        $trace->output("Delete complete.");
     }
 
-    /**
-     * Streams aggregated JSON strings one event at a time from local_obu_att_ws_manualupload.
-     *
-     * @return Generator<string, string> Yields eventidnumber => json_string
-     */
-    public static function get_aggregated_reservations(): \Generator {
+    public static function batch_upsert_process($trace) {
+        $trace->output("Upsert started.");
+        foreach (manual_upload_processor::get_aggregated_reservation_upserts() as $event) {
+            local_attendance_ws_upsert_sessions($event);
+        }
+        $trace->output("Upsert complete.");
+    }
+
+    private static function get_aggregated_reservation_upserts(): \Generator {
         global $DB;
 
         $sql = "SELECT 
-                    m.eventidnumber,
-                    m.courseidnumber,
-                    m.roomid,
-                    m.start,
-                    m.duration,
-                    m.groupname,
-                    m.semestername,
-                    s.id AS existing_session_record_id,
-                    CASE 
-                        WHEN s.id IS NULL THEN 'INSERT'
-                        ELSE 'UPDATE'
-                    END AS action_needed
-                FROM {local_obu_att_ws_manualupload} m
-                LEFT JOIN {local_obu_att_ws_sessions} s 
-                    ON m.eventidnumber = s.eventidnumber
-                   AND m.courseidnumber = s.courseidnumber
-                   AND m.groupname = s.groupname
-                   AND m.semestername = s.semestername";
+                    eventidnumber,
+                    courseidnumber,
+                    roomid,
+                    start,
+                    duration,
+                    groupname,
+                    semestername,
+                FROM {local_obu_att_ws_manualupload}";
 
         $recordset = $DB->get_recordset_sql($sql);
 
@@ -61,7 +66,7 @@ class manual_upload_processor
             // 1. New Event encountered -> yield the completed previous event and reset
             if ($current_event_id !== $row->eventidnumber) {
                 if ($current_event !== null) {
-                    yield $current_event_id => $current_event;
+                    yield $current_event;
                 }
 
                 $current_event_id = $row->eventidnumber;
@@ -96,7 +101,7 @@ class manual_upload_processor
 
         // Flush the very last event after the loop ends
         if ($current_event !== null) {
-            yield $current_event_id => $current_event;
+            yield $current_event;
         }
 
         $recordset->close();
