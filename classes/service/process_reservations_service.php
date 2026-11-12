@@ -197,7 +197,7 @@ class process_reservations_service {
 
             foreach ($course['groups'] as $group) {
 
-                $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'];
+                $key = $unprocessedReservation->eventidnumber . '|' . $course['courseIdNumber'] . '|' . $group['name'] . '|' . $group['semesterName'];
                 $newReservations[$key] = [
                     'eventidnumber' => $unprocessedReservation->eventidnumber,
                     'start' => $unprocessedReservation->start,
