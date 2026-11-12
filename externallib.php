@@ -82,8 +82,6 @@ class local_attendance_ws_external extends external_api {
     }
 
     public static function upsert_sessions($reservations) {
-        global $DB;
-
         self::validate_context(context_system::instance());
 
         $params = self::validate_parameters(
@@ -93,61 +91,7 @@ class local_attendance_ws_external extends external_api {
 
         self::require_manage_sesions_access();
 
-        $currentTime = time();
-
-        foreach ($params['reservations'] as $reservation) {
-
-            $eventIdNumber = $reservation['eventIdNumber'];
-            $roomId = $reservation['roomId'];
-            $start = $reservation['start'];
-            $duration = $reservation['duration'];
-
-            $payloadjson = json_encode($reservation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $payloadhash = sha1($payloadjson);
-
-            $existing = $DB->get_record('local_obu_att_ws_reservation', [
-                'eventidnumber' => $eventIdNumber
-            ], '*', IGNORE_MISSING);
-
-            if (!$existing) {
-                $record = (object)[
-                    'eventidnumber' => $eventIdNumber,
-                    'roomid' => $roomId,
-                    'start' => $start,
-                    'duration' => $duration,
-                    'payloadjson' => $payloadjson,
-                    'payloadhash' => $payloadhash,
-                    'is_delete' => 0,
-                    'is_processed' => 0,
-                    'timecreated' => $currentTime,
-                    'timemodified' => $currentTime,
-                ];
-                $DB->insert_record('local_obu_att_ws_reservation', $record);
-
-            } else {
-                $update = (object)[
-                    'id'           => $existing->id,
-                    'roomid'        => $roomId,
-                    'start'         => $start,
-                    'duration'      => $duration,
-                    'payloadjson'  => $payloadjson,
-                    'payloadhash'  => $payloadhash,
-                    'is_delete'    => 0,
-                    'timemodified' => $currentTime,
-                ];
-
-                // Only queue the scheduled task if changed.
-                if ($existing->payloadhash !== $payloadhash) {
-                    $update->is_processed = 0;
-                }
-
-                $DB->update_record('local_obu_att_ws_reservation', $update);
-            }
-        }
-
-        return [
-            'success' => true
-        ];
+        return local_attendance_ws_upsert_sessions($params['reservations']);
     }
 
     public static function delete_sessions_parameters() {
@@ -170,8 +114,6 @@ class local_attendance_ws_external extends external_api {
     }
 
     public static function delete_sessions($eventidnumbers) {
-        global $DB;
-
         self::validate_context(context_system::instance());
 
         $params = self::validate_parameters(
@@ -183,50 +125,7 @@ class local_attendance_ws_external extends external_api {
 
         self::require_manage_sesions_access();
 
-        $currenttime = time();
-
-        foreach ($params['eventIdNumbers'] as $eventidnumber) {
-            $payloadjson = json_encode(
-                ['eventIdNumber' => $eventidnumber],
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-            );
-            $payloadhash = sha1($payloadjson);
-
-            $existing = $DB->get_record('local_obu_att_ws_reservation', [
-                'eventidnumber' => $eventidnumber
-            ]);
-
-            if (!$existing) {
-                $record = (object)[
-                    'eventidnumber' => $eventidnumber,
-                    'roomid' => '',
-                    'start' => 0,
-                    'duration' => 0,
-                    'payloadjson' => $payloadjson,
-                    'payloadhash' => $payloadhash,
-                    'is_delete' => 1,
-                    'is_processed' => 0,
-                    'timecreated' => $currenttime,
-                    'timemodified' => $currenttime,
-                ];
-
-                $DB->insert_record('local_obu_att_ws_reservation', $record);
-            } else {
-                $update = new \stdClass();
-                $update->id = $existing->id;
-                $update->payloadjson = $payloadjson;
-                $update->payloadhash = $payloadhash;
-                $update->is_delete = 1;
-                $update->is_processed = 0;
-                $update->timemodified = $currenttime;
-
-                $DB->update_record('local_obu_att_ws_reservation', $update);
-            }
-        }
-
-        return [
-            'success' => true
-        ];
+        return local_attendance_ws_delete_sessions($params['eventIdNumbers']);
     }
 
     // Get settings

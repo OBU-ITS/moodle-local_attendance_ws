@@ -50,9 +50,9 @@ class process_reservations_service {
         $sql = "SELECT *
                 FROM {local_obu_att_ws_reservation} 
                 WHERE is_processed = 0 
-                ORDER BY id ASC";
+                ORDER BY timemodified ASC, id ASC";
 
-        return $DB->get_records_sql($sql);
+        return $DB->get_records_sql($sql, [], 0, 1000);
     }
 
     /**

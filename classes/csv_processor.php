@@ -7,15 +7,15 @@ namespace local_attendance_ws;
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Convert module group CSV files to per-course JSON.
- *v
+ * Import reservation CSV rows for attendance processing.
+ *
  * @package local_attendance_ws
  * @copyright 2026 Oxford Brookes University
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class csv_processor
 {
-    public static function process_csv_file(string $filepath, $trace)
+    public static function process_csv_file(string $filepath, $trace): int
     {
         global $DB;
 
@@ -56,10 +56,11 @@ class csv_processor
         $time_end = microtime(true);
         $execution_time = ($time_end - $time_start)/60;
         $trace->output("Total Execution Time: {$execution_time} Mins");
+        return $count;
     }
 
     /**
-     * Yields JSON objects line-by-line for a CSV sorted by 'Id'.
+     * Yields reservation records line-by-line from a CSV.
      * Uses constant O(1) memory regardless of file size.
      *
      * @param string $filepath Path to the CSV file.
@@ -89,12 +90,12 @@ class csv_processor
             // Calculate start Unix timestamp
             $timeParts = explode('-', $time);
             $startTimeStr = trim($timeParts[0]);
-            $dateObj = \DateTime::createFromFormat('j/n/y H:i', "{$date} {$startTimeStr}", new \DateTimeZone(date_default_timezone_get()));
+            $dateObj = \DateTime::createFromFormat('!j/n/Y H:i', "{$date} {$startTimeStr}", new \DateTimeZone(date_default_timezone_get()));
             $startTimestamp = $dateObj ? (string)$dateObj->getTimestamp() : '0';
 
-            // Calculate duration in seconds (e.g. 02:00 -> 7200)
-            list($hours, $minutes) = explode(':', $length);
-            $durationSeconds = (string)(((int)$hours * 3600) + ((int)$minutes * 60));
+            // Accept HH:MM:SS and retain support for HH:MM (e.g. 02:00:00 -> 7200).
+            list($hours, $minutes, $seconds) = array_pad(explode(':', $length), 3, '0');
+            $durationSeconds = (string)(((int)$hours * 3600) + ((int)$minutes * 60) + (int)$seconds);
 
             // Standardize module to course ID number (e.g. ENGR6010_S1_2_202609 -> 2026.ENGR6010_S1_2)
             $courseIdNumber = self::format_course_id($module);
