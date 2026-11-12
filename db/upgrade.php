@@ -137,12 +137,17 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
 
         $table = new xmldb_table('local_obu_att_ws_sessions');
         $oldkey = new xmldb_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname']);
-        if ($dbman->key_exists($table, $oldkey)) {
+        // Moodle implements unique keys as indexes; there is no key_exists() API.
+        $oldindex = new xmldb_index('uniq_item', XMLDB_INDEX_UNIQUE, $oldkey->getFields());
+        if ($dbman->index_exists($table, $oldindex)) {
             $dbman->drop_key($table, $oldkey);
         }
 
         $newkey = new xmldb_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname', 'semestername']);
-        $dbman->add_key($table, $newkey);
+        $newindex = new xmldb_index('uniq_item', XMLDB_INDEX_UNIQUE, $newkey->getFields());
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_key($table, $newkey);
+        }
 
 
         $table = new xmldb_table('local_obu_att_ws_manualupload');
