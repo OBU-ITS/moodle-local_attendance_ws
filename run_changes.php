@@ -10,7 +10,10 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use local_attendance_ws\task\adhoc_process_manual_upload;
+
 require_once(__DIR__ . '/../../config.php');
+require_once(__DIR__ . '/classes/task/adhoc_process_manual_upload.php');
 
 require_login();
 $context = context_system::instance();
@@ -26,7 +29,7 @@ $PAGE->navbar->add(get_string('runchangestitle', 'local_attendance_ws'));
 if (data_submitted()) {
     require_sesskey();
 
-    $task = new \local_attendance_ws\task\adhoc_process_manual_upload();
+    $task = new adhoc_process_manual_upload();
     $task->set_component('local_attendance_ws');
     \core\task\manager::queue_adhoc_task($task);
 

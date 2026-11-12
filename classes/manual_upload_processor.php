@@ -8,6 +8,8 @@ use local_attendance_ws\service\process_reservations_service;
 
 defined('MOODLE_INTERNAL') || die();
 
+require_once(__DIR__ . '/../locallib.php');
+
 /**
  * @package local_attendance_ws
  * @copyright 2026 Oxford Brookes University
@@ -18,8 +20,8 @@ class manual_upload_processor
     public static function batch_delete_process($trace) {
         global $DB;
 
-        $sql = "SELECT s.eventidnumber
-                  FROM {local_obu_att_ws_payload} p
+        $sql = "SELECT p.eventidnumber
+                  FROM {local_obu_att_ws_reservation} p
              LEFT JOIN {local_obu_att_ws_manualupload} m
                     ON p.eventidnumber = m.eventidnumber
                  WHERE m.id IS NULL";
@@ -37,7 +39,7 @@ class manual_upload_processor
     public static function batch_upsert_process($trace) {
         $trace->output("Upsert started.");
         foreach (manual_upload_processor::get_aggregated_reservation_upserts() as $event) {
-            local_attendance_ws_upsert_sessions($event);
+            local_attendance_ws_upsert_sessions([$event]);
         }
         $trace->output("Upsert complete.");
     }
@@ -52,7 +54,7 @@ class manual_upload_processor
                     start,
                     duration,
                     groupname,
-                    semestername,
+                    semestername
                 FROM {local_obu_att_ws_manualupload}";
 
         $recordset = $DB->get_recordset_sql($sql);
