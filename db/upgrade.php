@@ -165,5 +165,18 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
         upgrade_plugin_savepoint(true, 2026111100, 'local', 'attendance_ws');
     }
 
+    if ($oldversion < 2026111200) {
+        $table = new xmldb_table('local_obu_att_ws_manualupload');
+        $index = new xmldb_index('idx_event_course_id', XMLDB_INDEX_NOTUNIQUE, ['eventidnumber', 'courseidnumber', 'id']);
+
+        // Conditionally launch add index idx_event_course_id
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Save point reached.
+        upgrade_plugin_savepoint(true, 2026111200, 'local', 'attendance_ws');
+    }
+
     return $result;
 }

@@ -67,6 +67,10 @@
                 <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
                 <KEY NAME="uniq_item" TYPE="unique" FIELDS="eventidnumber,courseidnumber,groupname,semestername"/>
             </KEYS>
+
+            <INDEXES>
+                <INDEX NAME="idx_event_course_id" UNIQUE="false" FIELDS="eventidnumber,courseidnumber,id"/>
+            </INDEXES>
         </TABLE>
 
     </TABLES>
