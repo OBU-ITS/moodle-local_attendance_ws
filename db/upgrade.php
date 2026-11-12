@@ -133,5 +133,55 @@ function xmldb_local_attendance_ws_upgrade($oldversion = 0) {
         upgrade_plugin_savepoint(true, 2026030900, 'local', 'attendance_ws');
     }
 
+    if ($oldversion < 2026111100) {
+
+        $table = new xmldb_table('local_obu_att_ws_sessions');
+        $oldkey = new xmldb_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname']);
+        // Moodle implements unique keys as indexes; there is no key_exists() API.
+        $oldindex = new xmldb_index('uniq_item', XMLDB_INDEX_UNIQUE, $oldkey->getFields());
+        if ($dbman->index_exists($table, $oldindex)) {
+            $dbman->drop_key($table, $oldkey);
+        }
+
+        $newkey = new xmldb_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname', 'semestername']);
+        $newindex = new xmldb_index('uniq_item', XMLDB_INDEX_UNIQUE, $newkey->getFields());
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_key($table, $newkey);
+        }
+
+
+        $table = new xmldb_table('local_obu_att_ws_manualupload');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('eventidnumber', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('courseidnumber', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('roomid', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('start', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('duration', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('groupname', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('semestername', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('uniq_item', XMLDB_KEY_UNIQUE, ['eventidnumber', 'courseidnumber', 'groupname', 'semestername']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        // Save point reached.
+        upgrade_plugin_savepoint(true, 2026111100, 'local', 'attendance_ws');
+    }
+
+    if ($oldversion < 2026111200) {
+        $table = new xmldb_table('local_obu_att_ws_manualupload');
+        $index = new xmldb_index('idx_event_course_id', XMLDB_INDEX_NOTUNIQUE, ['eventidnumber', 'courseidnumber', 'id']);
+
+        // Conditionally launch add index idx_event_course_id
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Save point reached.
+        upgrade_plugin_savepoint(true, 2026111200, 'local', 'attendance_ws');
+    }
+
     return $result;
 }

@@ -50,9 +50,9 @@ class process_reservations_service {
         $sql = "SELECT *
                 FROM {local_obu_att_ws_reservation} 
                 WHERE is_processed = 0 
-                ORDER BY id ASC";
+                ORDER BY timemodified ASC, id ASC";
 
-        return $DB->get_records_sql($sql);
+        return $DB->get_records_sql($sql, [], 0, 1000);
     }
 
     /**
@@ -258,7 +258,7 @@ class process_reservations_service {
         ];
     }
 
-    private function processDeletes($deleteKeys, $oldReservations, $trace): void {
+    public function processDeletes($deleteKeys, $oldReservations, $trace): void {
         global $DB;
 
         foreach ($deleteKeys as $key) {
@@ -279,6 +279,7 @@ class process_reservations_service {
                 'eventidnumber' => $old['eventidnumber'],
                 'courseidnumber' => $old['courseidnumber'],
                 'groupname' => $old['groupname'],
+                'semestername'   => $old['semestername'],
             ]);
 
             $trace->output("Deleted Moodle session {$old['session_id']} and removed lookup row for {$key}");
