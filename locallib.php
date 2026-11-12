@@ -33,6 +33,131 @@ require_once($CFG->dirroot . '/mod/attendance/lib.php');
 require_once($CFG->dirroot . "/course/modlib.php");
 require_once($CFG->dirroot . '/group/lib.php');
 
+/**
+ * Queue validated reservations for attendance session processing.
+ *
+ * @param array $reservations Validated reservation data.
+ * @return array Success status.
+ */
+function local_attendance_ws_upsert_sessions($reservations) {
+    global $DB;
+
+    $currentTime = time();
+
+    foreach ($reservations as $reservation) {
+
+        $eventIdNumber = $reservation['eventIdNumber'];
+        $roomId = $reservation['roomId'];
+        $start = $reservation['start'];
+        $duration = $reservation['duration'];
+
+        $payloadjson = json_encode($reservation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $payloadhash = sha1($payloadjson);
+
+        $existing = $DB->get_record('local_obu_att_ws_reservation', [
+            'eventidnumber' => $eventIdNumber
+        ], '*', IGNORE_MISSING);
+
+        if (!$existing) {
+            $record = (object)[
+                'eventidnumber' => $eventIdNumber,
+                'roomid' => $roomId,
+                'start' => $start,
+                'duration' => $duration,
+                'payloadjson' => $payloadjson,
+                'payloadhash' => $payloadhash,
+                'is_delete' => 0,
+                'is_processed' => 0,
+                'timecreated' => $currentTime,
+                'timemodified' => $currentTime,
+            ];
+            $DB->insert_record('local_obu_att_ws_reservation', $record);
+
+        } else {
+            if ($existing->payloadhash === $payloadhash) {
+                continue;
+            }
+
+            $update = (object)[
+                'id'           => $existing->id,
+                'roomid'        => $roomId,
+                'start'         => $start,
+                'duration'      => $duration,
+                'payloadjson'  => $payloadjson,
+                'payloadhash'  => $payloadhash,
+                'is_delete'    => 0,
+                'timemodified' => $currentTime,
+            ];
+
+            // Only queue the scheduled task if changed.
+            if ($existing->payloadhash !== $payloadhash) {
+                $update->is_processed = 0;
+            }
+
+            $DB->update_record('local_obu_att_ws_reservation', $update);
+        }
+    }
+
+    return [
+        'success' => true
+    ];
+}
+
+/**
+ * Queue attendance session deletion requests.
+ *
+ * @param array $eventidnumbers Validated reservation event ID numbers.
+ * @return array Success status.
+ */
+function local_attendance_ws_delete_sessions($eventidnumbers) {
+    global $DB;
+
+    $currenttime = time();
+
+    foreach ($eventidnumbers as $eventidnumber) {
+        $payloadjson = json_encode(
+            ['eventIdNumber' => $eventidnumber],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+        $payloadhash = sha1($payloadjson);
+
+        $existing = $DB->get_record('local_obu_att_ws_reservation', [
+            'eventidnumber' => $eventidnumber
+        ]);
+
+        if (!$existing) {
+            $record = (object)[
+                'eventidnumber' => $eventidnumber,
+                'roomid' => '',
+                'start' => 0,
+                'duration' => 0,
+                'payloadjson' => $payloadjson,
+                'payloadhash' => $payloadhash,
+                'is_delete' => 1,
+                'is_processed' => 0,
+                'timecreated' => $currenttime,
+                'timemodified' => $currenttime,
+            ];
+
+            $DB->insert_record('local_obu_att_ws_reservation', $record);
+        } else {
+            $update = new \stdClass();
+            $update->id = $existing->id;
+            $update->payloadjson = $payloadjson;
+            $update->payloadhash = $payloadhash;
+            $update->is_delete = 1;
+            $update->is_processed = 0;
+            $update->timemodified = $currenttime;
+
+            $DB->update_record('local_obu_att_ws_reservation', $update);
+        }
+    }
+
+    return [
+        'success' => true
+    ];
+}
+
 function local_attendance_ws_password_hash($slotid, $roomid, $eventdate, $length, $salt = ""): string
 {
     $combination = $slotid . "_" .  $roomid . "_" . $eventdate . "_" . $salt;
