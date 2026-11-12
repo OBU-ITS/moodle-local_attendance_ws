@@ -224,7 +224,7 @@ class process_reservations_service {
         foreach ($oldSessionRows as $row) {
             $attendancesession = $attendanceSessions[$row->session_id] ?? null;
 
-            $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname;
+            $key = $row->eventidnumber . '|' . $row->courseidnumber . '|' . $row->groupname . '|' . $row->semestername;
 
             $oldReservations[$key] = [
                 'id' => $row->id,
