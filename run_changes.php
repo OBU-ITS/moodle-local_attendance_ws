@@ -23,6 +23,17 @@ $PAGE->set_title(get_string('runchangestitle', 'local_attendance_ws'));
 $PAGE->set_heading(get_string('plugintitle', 'local_attendance_ws'));
 $PAGE->navbar->add(get_string('runchangestitle', 'local_attendance_ws'));
 
+if (data_submitted()) {
+    require_sesskey();
+
+    $task = new \local_attendance_ws\task\adhoc_process_manual_upload();
+    $task->set_component('local_attendance_ws');
+    \core\task\manager::queue_adhoc_task($task);
+
+    redirect($PAGE->url, get_string('runchangestaskcreated', 'local_attendance_ws'), null,
+        \core\output\notification::NOTIFY_SUCCESS);
+}
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('runchangestitle', 'local_attendance_ws'));
 
@@ -30,11 +41,7 @@ $csvlink = html_writer::link(new moodle_url('/local/attendance_ws/csv.php'),
     get_string('csvuploadlink', 'local_attendance_ws'));
 echo $OUTPUT->notification(get_string('runchangescsvwarning', 'local_attendance_ws', $csvlink), 'warning');
 
-// Placeholder only: connect this button to the processing workflow later.
-echo html_writer::tag('button', get_string('runchangesbutton', 'local_attendance_ws'), [
-    'type' => 'button',
-    'id' => 'attendance-run-changes',
-    'class' => 'btn btn-primary',
-]);
+echo $OUTPUT->single_button($PAGE->url, get_string('runchangesbutton', 'local_attendance_ws'), 'post',
+    ['primary' => true]);
 
 echo $OUTPUT->footer();

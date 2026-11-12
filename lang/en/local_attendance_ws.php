@@ -65,3 +65,4 @@ $string['csvnodata'] = 'No reservation data was found. Include data rows after t
 $string['runchangestitle'] = 'Run attendance changes';
 $string['runchangescsvwarning'] = 'Before running the changes, upload the CSV if you have not already done so. {$a}';
 $string['runchangesbutton'] = 'Run changes';
+$string['runchangestaskcreated'] = 'Ad hoc task created. It will run in the background when cron processes the task queue.';
