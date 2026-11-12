@@ -125,6 +125,10 @@ class local_attendance_ws_external extends external_api {
                 $DB->insert_record('local_obu_att_ws_reservation', $record);
 
             } else {
+                if ($existing->payloadhash === $payloadhash) {
+                    continue;
+                }
+
                 $update = (object)[
                     'id'           => $existing->id,
                     'roomid'        => $roomId,
