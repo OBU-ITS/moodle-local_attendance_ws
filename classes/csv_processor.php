@@ -98,7 +98,7 @@ class csv_processor
             $durationSeconds = (string)(((int)$hours * 3600) + ((int)$minutes * 60) + (int)$seconds);
 
             // Standardize module to course ID number (e.g. ENGR6010_S1_2_202609 -> 2026.ENGR6010_S1_2)
-            $courseIdNumber = self::format_course_id($module);
+            $courseIdNumber = self::format_course_id_number($module);
 
             // Extract semester name (e.g. S1)
             $groupSemesterName = self::extract_semester($moduleGroup);
@@ -117,19 +117,33 @@ class csv_processor
         fclose($file);
     }
 
-    private static function format_course_id(string $module): string {
-        if (preg_match('/^(.+)_(\d{4})\d{2}$/', trim($module), $matches)) {
-            return "{$matches[2]}.{$matches[1]}";
+    private static function format_course_id_number(string $relation): string
+    {
+        if (!preg_match('/^([A-Z0-9_]+?)_(\d{4})(\d{2})$/', $relation, $matches)) {
+            return $relation;
         }
-        return $module;
+
+        [, $coursePrefix, $yearStr, $monthStr] = $matches;
+
+        $month = (int) $monthStr;
+        if ($month < 1 || $month > 12) {
+            throw new \InvalidArgumentException("Invalid month '{$monthStr}' in course relation: '{$relation}'");
+        }
+
+        $year = (int) $yearStr;
+        if ($month < 9) {
+            $year--;
+        }
+
+        return sprintf('%04d%02d.%s', $year, $month, $coursePrefix);
     }
 
     private static function extract_semester(string $module): string {
-        if (preg_match('/^([A-Z0-9_]+)_(\d{4})\d{2}_Whole Cohort$/', $module, $matches)) {
+        if (preg_match('/^[A-Z0-9_]+_\d{4}\d{2}_Whole Cohort$/', $module, $matches)) {
             return "WC";
         }
-        if (preg_match('/^([A-Z0-9_]+)_(\d{4})\d{2}_[a-zA-Z0-9]+_([A-Z0-9]+)$/', $module, $matches)) {
-            return $matches[3];
+        if (preg_match('/^[A-Z0-9_]+_\d{4}\d{2}_[a-zA-Z0-9]+_([A-Z0-9]+)$/', $module, $matches)) {
+            return $matches[1];
         }
         return $module;
     }
