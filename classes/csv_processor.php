@@ -135,7 +135,7 @@ class csv_processor
             $year--;
         }
 
-        return sprintf('%04d%02d.%s', $year, $month, $coursePrefix);
+        return sprintf('%04d.%s', $year, $coursePrefix);
     }
 
     private static function extract_semester(string $module): string {
